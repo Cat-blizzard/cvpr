@@ -1,9 +1,6 @@
 # MotionExpert
 
-新机器请先阅读[安装与路径配置](../docs/setup/README.md)和[复现实验入口](../docs/reproduction/README.md)，
-使用 `scripts/configure_paths.py` 生成本机 `.local/configs/motion.local.json`，并通过 `--config` 显式传入。
-本页 `/gaozt-test1` 等绝对路径属于既有任务记录；原配置与源码保留其验收身份，不作为新机器的通用默认入口。
-只设置 `MOTIONEXPERT_DATA_DIR` 不会自动重定位统计、DINO 缓存和训练输出，完整迁移请使用生成的配置。
+路径配置见[配置说明](../configs/README.md)，训练与推理入口见[使用说明](../docs/reproduction/README.md)。
 
 在5Hz上读取历史5帧＋当前帧图像，联合重建历史运动并预测未来5帧。当前帧与Ψ₀当前帧同源、同时间。
 后训练在完整高斯噪声 `t=1` 上执行一次网络调用，得到完整11个motion hidden供下游输入，同时提供mean pooling摘要；
@@ -185,7 +182,7 @@ FP16＋fused AdamW因不能保证pre-step时已unscale而拒绝；当前BF16＋�
 | 指标同步 | `BATCHED_METRIC_SYNC=true`；每10步合并同步，epoch均值保留全部训练样本 |
 | 优化器融合 | `FUSED_ADAMW=false`，继续使用普通AdamW |
 
-归档、缓存、统计与GPU验收已完成，用户已授权按以下配置从头启动正式训练：
+从头训练：
 
 ```bash
 cd /root/workspace/wbc/guanzerong/cvpr
@@ -197,7 +194,7 @@ NCCL_IB_DISABLE=1 NCCL_P2P_DISABLE=0 NCCL_SHM_DISABLE=0 NCCL_SOCKET_IFNAME=lo \
 
 输出位于 `training/smplh_k12_psi0_256x480_5hz_camera_quality_v4_meanpool_from_scratch`，在MixEgoMotion根目录。
 Lightning启动DDP，无需另套torchrun。后续同架构续训须使用同一统计与视觉身份。
-2026-10-17按用户最新安排，从第100轮checkpoint完整续训，目标累计200轮：
+从已有checkpoint续训：
 
 ```bash
 cd /root/workspace/wbc/guanzerong/cvpr
@@ -211,7 +208,6 @@ NCCL_IB_DISABLE=1 NCCL_P2P_DISABLE=0 NCCL_SHM_DISABLE=0 NCCL_SOCKET_IFNAME=lo \
 
 完整恢复优化器、EMA、调度和step计数，从第101轮继续；不重新warmup，不额外训练200轮。
 恢复点学习率约5.84e-5，沿用原200轮日程至1e-5；每20轮保存和每5轮验证保持不变。
-原20—100轮checkpoint与冻结先验验证产物保留，当前PID及日志以 `.pipeline/current_motionexpert_training.json` 为准。
 
 上述通信设置适用于当前单机八卡；显式覆盖继承的P2P／SHM禁用环境，正式命令不再使用
 `--ddp-socket`。该选项仍保留为通信兼容性回退，会关闭P2P和共享内存。
@@ -219,21 +215,6 @@ NCCL_IB_DISABLE=1 NCCL_P2P_DISABLE=0 NCCL_SHM_DISABLE=0 NCCL_SOCKET_IFNAME=lo \
 合并指标只改变日志通信：`train/loss_step` 保留日志时刻的全局batch均值，
 `train/loss_epoch` 按样本数汇总整轮，包含最后一个日志周期之后的尾批。
 逐步loss／激活／梯度异常保护、梯度同步和动态空专家检查继续启用。
-
-2026-10-16八卡BF16验证使用同一批已验收的真实数据，每卡256，连续32次更新；
-剔除前4步，以各步最慢rank的耗时求平均：
-
-| 通信／指标方式 | 固定batch平均耗时 |
-| --- | --- |
-| socket／原指标同步 | 1.232秒／步 |
-| socket／合并指标同步 | 1.254秒／步 |
-| P2P／合并指标同步 | 0.411秒／步 |
-
-三组均通过loss、梯度和激活有限性检查，模型及EMA的全量hash在八卡一致；
-仅改变指标同步时，更新后的模型与EMA还与原方式逐字节相同。
-单独合并指标未测出独立吞吐收益，组合收益主要来自通信。
-约3倍是固定batch的短时结果，不含DataLoader等待，不代表整轮或全训练提速倍数。
-验证记录位于 `/gaozt-test1/datasets/MixEgoMotion/.pipeline/current_motionexpert_optimization.json` 所指任务目录。
 
 ## 每轮更新loss曲线
 
@@ -243,7 +224,7 @@ NCCL_IB_DISABLE=1 NCCL_P2P_DISABLE=0 NCCL_SHM_DISABLE=0 NCCL_SOCKET_IFNAME=lo \
 不把每10步记录的batch loss当作整轮均值。没有整轮记录的当前轮不会提前画入。
 
 直接执行文件，避免导入训练包；绘图需要TensorBoard及可选依赖 `matplotlib>=3.7,<4`。
-当前单独CPU环境的运行命令为：
+运行命令：
 
 ```bash
 /root/.cache/cvpr-loss-plot/bin/python -u \
@@ -261,8 +242,6 @@ NCCL_IB_DISABLE=1 NCCL_P2P_DISABLE=0 NCCL_SHM_DISABLE=0 NCCL_SOCKET_IFNAME=lo \
 用 `--run-dir /绝对路径` 可查看指定任务，`--output-dir` 可指定输出位置；
 `--once` 只刷新一次后退出。相同输出目录仅允许一个绘图进程，停止绘图不影响训练。
 日志晚写入的epoch或验证值会在后续扫描补上；不会将另一个训练任务混入当前曲线。
-当前绘图守护状态及日志位置见
-`/gaozt-test1/datasets/MixEgoMotion/.pipeline/current_motionexpert_loss_plot.json`。
 
 ## 一步hidden与在线共享图像
 
@@ -329,9 +308,9 @@ DINO保留6×5×1024时序后仅在train拟合PCA768，记录解释方差；三�
 `--stage extract` 仅提取；`--stage fit` 在已提取的同一输出目录拟合读出。
 该验证衡量冻结pooled特征的运动信息可读性，不直接等同于下游注入收益；DINO压缩也可能丢失信息。
 
-2026-10-17首次验证：8张A100、每卡B128、两份EMA、FP32；train 30,704窗／val 7,604窗。
+线性读出对照：8张A100、每卡B128、两份EMA、FP32；train 30,704窗／val 7,604窗。
 各来源train 1024个episode、val 256个episode，验证连通组EgoSuite 114／HM 59。
-20／100轮各卡B4与公开特征接口严格一致，MotionExpert无可训练参数或梯度；20项新增CPU检查通过。
+20／100轮各卡B4与公开特征接口严格一致，MotionExpert无可训练参数或梯度。
 EgoSuite的100−20轮腕位移误差为−0.311cm（组95%区间−0.545至−0.068），参考XY为−0.428cm
 （−0.652至−0.212）；HM主要差值区间跨0。没有证据说明100轮的冻结线性读出泛化退化。
 但EgoSuite的零位移参照仍优于两组腕／参考位移读出；接触变化读出F1为0，不能把高接触F1当作变化预测能力。
@@ -354,7 +333,7 @@ cd /root/workspace/wbc/guanzerong/cvpr
 原产物只读保留，并核对新旧逐卡窗口、噪声、历史图像摘要。报告增加160−20、160−100的分来源配对组区间。
 此项是train／val冻结先验验证；完整test动作指标另按原test协议评估，二者的预测目标与样本不能混同。
 
-2026-10-18增量验证已完成：仍为相同38,308窗，8卡各B128、EMA／FP32；20／100旧读出回放误差为0。
+增量对照：仍为相同38,308窗，8卡各B128、EMA／FP32；20／100旧读出回放误差为0。
 160−100轮的EgoSuite腕／参考XY误差分别增加0.192／0.265cm，HM增加0.336／0.372cm；
 四项配对组95%区间均在0以上。HM接触切换F1从0.2361提高至0.2623，其余分量存在取舍。
 在这项冻结位移读出中，100轮为三者中较好的候选；结果不直接等同于完整test动作或下游收益。
@@ -405,7 +384,7 @@ cd /root/workspace/wbc/guanzerong/cvpr
 优先使用空闲GPU；共享训练GPU时会争用算力，应明确记录并限速，不能保证零吞吐影响。
 `control.json` 和 `fit-control.json` 的 `paused`／`sleep_seconds` 仅控制诊断，不操作训练。
 
-2026-10-18，第100轮EMA的四组对照已完成。以下为7,604个val窗上三个独立读出seed的均值±标准差，
+第100轮EMA的四组对照结果如下。以下为7,604个val窗上三个独立读出seed的均值±标准差，
 按未来0.2至1.0秒的五个时距汇总有效观测；每组均为290,886参数。
 
 | 来源 | 输入 | 双腕位移cm↓ | 参考XY位移cm↓ | 转向°↓ |
@@ -426,31 +405,7 @@ cd /root/workspace/wbc/guanzerong/cvpr
 脚接触仍需看balanced accuracy和状态变化：EgoSuite全部11的这两项仅0.5420／F1 0.0414，
 其接触正类约92.94%，较高的普通接触F1不能单独作为有效运动证据。
 
-八卡B128完整hidden提取与旧均值特征逐窗精确一致；单卡B256完成12个head、24项分阶段GPU检查，
-34项相关CPU回归通过。全部内部拟合按patience停止，无40轮预算触顶。
-正式训练未停止、未重启或改配置；诊断限速共享GPU，不宣称零吞吐影响。
+全部内部拟合按patience停止，无40轮预算触顶。
 分析、完整指标、配对区间与独立review保存在：
 `/gaozt-test1/datasets/MixEgoMotion/.pipeline/jobs/motionexpert-token-ablation100-20261018T054910Z-paired128/`。
 其中 `analysis.md` 解释结果及边界，`token-metrics.json` 保存逐seed指标与训练曲线。
-
-## 检查记录
-
-新增或修改路径的CPU回归位于 `MotionExpert/tests/`，不重复已通过的数据数值验收。
-GPU检查包括真实模型BF16连续更新、11hidden均值与反传、CFG、未来标签隔离、10步采样、
-八卡参数一致性及单卡异常全卡停止。短检不代表200轮收敛或全量吞吐验收。
-验收状态和报告位置由 `.pipeline/current_motionexpert_repair.json` 记录。
-当前训练PID、日志及配置快照由 `.pipeline/current_motionexpert_training.json` 记录。
-
-2026-10-16本轮验收：
-
-| 范围 | 结果 |
-| --- | --- |
-| 新窗口与统计 | train 999,387／val 125,045／test 125,126窗口；raw和归一化缓存验收通过，全train统计精确绑定本次缓存 |
-| 目标门限覆盖 | 零预测加权flow最大train 67.12、val 37.58、test 35.26；诊断组高值保留，并核对原相机/MPS证据 |
-| GPU连续更新 | 单卡B16与8卡各B256，BF16各4步；loss/梯度有限、参数更新有效、八卡完整模型参数一致 |
-| 一步接口 | 在cuda:0检查11hidden的严格均值、反传、CFG、未来标签隔离和10步采样 |
-| 异常保护 | 8卡各B16，前向NaN、超大有限objective、梯度NaN、超大梯度、周期采样NaN均全卡一致停止 |
-| 安全逻辑回归 | 38项CPU测试通过，另有独立源码review；未重跑已通过的FK数值验收 |
-
-运行样本包含相机坏边和有效运动极值，用于正确性检查。原失败门限报告、物理复核及最终报告均保存在
-`.pipeline/jobs/motionexpert-pooled-safety-v4-20261016T032143085018Z/`，不随Git提交。

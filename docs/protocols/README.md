@@ -1,6 +1,6 @@
 # 数据与模型协议
 
-本页汇总跨模块协作所需的稳定约定。具体字段和实现以 [MotionExpert](../../MotionExpert/README.md)、[ImageProcess](../../ImageProcess/README.md)、[pipeline](../../pipeline/README.md) 与 [VLMExpert](../../VLMExpert/README.md) 为准；代理工作规则见 [AGENTS.md](../../AGENTS.md)。本页不记录训练进度或机器运行状态。
+本页汇总跨模块协作所需的稳定约定。具体字段和实现以 [MotionExpert](../../MotionExpert/README.md)、[ImageProcess](../../ImageProcess/README.md)、[pipeline](../../pipeline/README.md) 与 [VLMExpert](../../VLMExpert/README.md) 为准。
 
 ## 时间与条件输入
 
@@ -49,6 +49,4 @@ DINO 使用冻结的 `dinov2-with-registers-large`；每帧输出 CLS＋4 个 re
 
 运动归档保留原始分割、手部、相机、地面、world 观测及有效 mask。5Hz 参考增量必须核对间隔内全部 30Hz 点和边，不能跨越跟踪中断。EgoSuite 没有源 confidence 时不伪造该字段；相机质量失败也不直接删除独立 world 观测或 DINO。
 
-正式训练依赖相互匹配的归档、窗口缓存、全 train 统计、架构和 GPU 验收。旧数据、checkpoint 和验收证据保留各自的身份；机器目录通过 [本机配置生成工具](../../configs/README.md) 设置。
-
-源码相对路径、模块名和文件 SHA 参与 [训练代码绑定](../../MotionExpert/readiness.py) 与 [窗口缓存身份](../../MotionExpert/dataset/window_cache.py)。迁移目录、改包名或改变来源路径时，需要核对兼容性与原始证据，不能将修改后的路径写入旧验收收据来表示已经通过检查。配置生成只准备本机参数，不创建数据或替代验收。
+数据、模型和输出目录的配置方式见[路径配置](../../configs/README.md)。

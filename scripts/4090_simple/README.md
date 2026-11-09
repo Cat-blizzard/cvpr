@@ -1,19 +1,7 @@
 # 4090 独立 SIMPLE 环境工具
 
-新机器先阅读[安装与本机路径](../../docs/setup/README.md)。资源默认根目录使用
-`CVPR_SIMPLE_RUNTIME`，未设置时为当前用户的 `~/CVPR_Evaluation_runtime`；PICO 采集与离线渲染的
-`--data-root` 优先于 `SIMPLE_DATA_DIR`，后者优先于 runtime 下的 `resources/simple_local_usd_v1`。
-历史 campaign、远端传输与权重身份仍按各专题的显式参数及原始记录核对，不能仅替换目录就视作验收完成。
-
-遵守 [交接文档](../../docs/4090_SIMPLE_HANDOFF.md)。本目录提供双Conda环境约束、
-本机路径、资源核验、真实历史／联合模型／HTTP检查及有界SIMPLE控制闭环工具。
-实际结果与未通过的边界见[GPU验收记录](../../docs/4090_SIMPLE_GPU_ACCEPTANCE.md)。
-已独立固定的28k权重的CarryBox适配、训练/保留测试划分与实际结果见
-[本地任务适配](../../docs/4090_SIMPLE_CARRYBOX_FINETUNE.md)。
-实际安装／验证记录在本机仓库外 `~/CVPR_Evaluation_runtime/reports/`。
-
-A100已提供CPU导出与保存完成等待工具`export_bundle.py`，4090可通过SSH／rsync拉取资源。
-具体源路径、READY判定、SHA校验及当前缺项见[资源交接](../../docs/4090_SIMPLE_TRANSFER.md)。
+资源根目录通过 `CVPR_SIMPLE_RUNTIME` 设置，默认 `~/CVPR_Evaluation_runtime`。PICO 采集与离线渲染中，
+`--data-root` 优先于 `SIMPLE_DATA_DIR`，默认资源目录为 `$CVPR_SIMPLE_RUNTIME/resources/simple_local_usd_v1`。
 
 ## Handover任务微调权重的本机测评
 
@@ -54,25 +42,20 @@ python scripts/4090_simple/prepare_handover_eval.py \
 trace额外保存目标/篮子姿态和具名接触，帮助区分仅碰篮、完整交接和释放；
 这些50Hz观测不冒充交付包完整的`handover-physics-v2`重新验收或官方独立TEST成绩。
 
-2026-10-22的任务6000步实际导出、五条16秒GPU结果及排除的前期DR0诊断见
-[测评记录](../../docs/A100_SIMPLE_TASK50_FINETUNE.md#任务6000步导出与本机handover物理测评)和
-[逐条证据索引](../../docs/a100_task6000_local_handover_evaluation.json)。
-五条中1条触发接触成功标志、均未跌倒；触发标志的末帧仍有左手接触，不能称为完整释放验收通过。
-
 后续[数据质量与100条重新采集](../../docs/HANDOVER_QUALITY100.md)单独审计原轨迹祖先、
 模板权重与物理时钟差异。`plan_handover_quality100.py`只生成候选计划，不能将计划算作数据。
 `replay_handover_teacher.py`是已编码教师命令的真实本机诊断/重采入口；
 `handover_contact_quality.py`和`handover_geometry_quality.py`保留源50Hz严格规则，
 包括原解算接触力、掌根、交接顺序与容器支撑，物理通过仍不自动授权数据入库。
 
-用户要求进一步扩充原始动作来源并提高场景与动作多样性后，使用独立的
+扩充动作来源和场景随机化使用
 [随机化100条采集流程](README_handover_random100.md)。该流程重新加载完整原始TRAIN候选，
 进行真实场景随机化、物体反馈动作适配、完整碰撞投影和多样性验收，再打包、提取DINO并同步A100；
 不将旧数据、失败试采或仅修改seed的候选计为新的100条。
 
 ## Conda 与依赖
 
-本机创建了两个新环境，未复用用户其他机器人环境：
+模型与仿真使用独立环境：
 
 ```bash
 source ~/miniconda3/etc/profile.d/conda.sh
@@ -83,9 +66,6 @@ conda create -n cvpr-simple-sim310 python=3.10 pip setuptools wheel
 Conda 管理解释器和环境；安装 Python 包时使用目标环境内的 pip，或
 `uv pip --python /目标conda环境/bin/python`，不使用 `uv sync` 创建第三套 Python 环境。
 所有安装都传对应的 `constraints-*.txt`，避免本地包升级 Torch／NumPy。
-两个新环境的 Conda 配置已保存本机缓存／资源变量和 `PYTHONNOUSERSITE=1`；
-后者防止 `~/.local/lib/python3.10/site-packages` 中的旧机器人包污染新环境。
-直接调用绝对路径 Python 时也须加载下述配置，或显式传此变量。
 
 模型侧先从 `https://download.pytorch.org/whl/cu126` 安装 Torch 2.7.0、
 Torchvision 0.22.0，再安装 `VLMExpert/pyproject.toml` 的 **project dependencies、
@@ -116,12 +96,10 @@ psi 和 serve dependency-groups**。pip 新版本可用 `--group /绝对路径/p
   展开源码没有自身 `.git`，本机显式设置
   `SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NVIDIA_CUROBO=0.0.0+cvpr.5810bc9` 以生成本地包 metadata；
   这是构建标签，源码身份仍绑定交接文档记录的完整上游提交。
-  Warp 固定 1.7.0。构建与实际导入结果以本机报告为准。
+  Warp 固定 1.7.0。
 
-`pip freeze`、`conda env export`、`conda list --explicit` 的本机快照在 reports 中；
-约束文件不是全量锁文件。宿主驱动不因安装不同 CUDA runtime 而升级。
 
-## 本机路径与冒烟检查
+## 路径配置
 
 在仓库根目录运行。激活环境后加载本机配置：
 
@@ -154,16 +132,14 @@ python scripts/4090_simple/probe.py isaac --output "$CVPR_SIMPLE_RUNTIME/reports
 
 Isaac 首次启动按安装器提示接受许可；自动化启动可在已授权安装时设置
 `OMNI_KIT_ACCEPT_EULA=YES`。Isaac probe 先创建 SimulationApp，再导入 Omniverse APIs，
-使用本机几何体和 RTX 相机，不以无窗口启动代替真实 RGB 检查。
-本次环境通过 `SIMPLE_ISAAC_PRELOAD_PINOCCHIO=1` 显式预加载 Pinocchio，避免 Kit 的旧
+使用几何体和 RTX 相机生成图像。
+可通过 `SIMPLE_ISAAC_PRELOAD_PINOCCHIO=1` 显式预加载 Pinocchio，避免 Kit 的旧
 Assimp 导致随后导入 SIMPLE／G1 时出现 HPP-FCL 未定义符号。默认 Kit 的 Lula 又要求旧
 URDF ABI，因此同时使用生成的专用 experience：从已安装4.5配置保留 core／physics／RTX／
 camera／Replicator 等依赖，仅移除11个引入 Lula 的 Cortex／旧机械臂示例根依赖。
 生成文件及来源 SHA／排除清单位于外部 runtime/apps；该配置用于 SIMPLE 的 CuRobo／SONIC 路径，
-不提供 Lula。未设置本次 opt-in 变量时，共享 helper 保持通用默认行为。
+不提供 Lula。未设置该选项时，共享 helper 保持通用默认行为。
 Omniverse APIs 仍在 app 创建后导入，检查完成还须审计整个启动日志中的 Error／Traceback。
-CuRobo probe 使用其自带 UR5e，在 batch1 的两个姿态上对照 CPU Pinocchio 检查 CUDA FK，
-不验收 G1 控制策略、碰撞查询或 IK。Isaac 结果在 Kit 关闭前落盘，须同时查看 JSON 状态和日志。
 probe 的 JSON 记录 running／failed／passed；图片、日志和 JSON 都写入外部 reports。
 
 跨环境通信：模型环境先运行下述 server，仿真环境再运行 client：
@@ -193,7 +169,6 @@ python scripts/4090_simple/prepare_simple_assets.py \
   --source-root "$CVPR_SIMPLE_SOURCE_DATA_DIR" --output-root "$SIMPLE_DATA_DIR"
 ```
 
-仅此步骤的文件与CPU USD组合检查不代表MDL编译或RTX渲染通过。
 然后用真实任务采集图像和状态；采集使用测量姿态PD，不是模型控制：
 
 ```bash
@@ -241,12 +216,6 @@ OMNI_KIT_ACCEPT_EULA=YES python scripts/4090_simple/run_closed_loop.py \
 SONIC 官方 v1.1 版本已经通过固定发布身份与官方 Psi0 训练脚本确认；
 `--diagnostic-unverified-sonic`记录原 UnifoLM token 未逐值复算这一追溯边界。
 不设置该选项时，须提供真实可追溯的 `--compatibility-evidence`，不得自行把未验证项置真。
-原 UnifoLM-20k 基线保留；用户后续授权的本地 SIMPLE 适配使用独立训练目录，
-与未适配的 A100 权重分别记录，不能混合报告。
-
-CPU回归：模型环境运行 `python -m unittest discover -s VLMExpert/tests -p test_dual_source_serving.py -v`；
-仿真环境运行 `python -m unittest discover -s scripts/4090_simple/tests -p 'test_*control.py' -v`
-及 `-p test_smoke_reporting.py`。CPU测试覆盖契约与报告，不代替上述GPU／物理检查。
 
 独立的举箱保持任务、RTX同域成功示范和本地微调流程见 [LiftBoxHold记录](../../docs/4090_SIMPLE_LIFTBOX_FINETUNE.md)。旧CarryBox派生包不能用于训练。
 
@@ -330,17 +299,12 @@ python scripts/4090_simple/finetune_lift_box_hold_joint.py \
 生产Dataset/MotionHistoryIndex/collator和所有标签/history/future。它们使用独立curated合同，
 不放宽原exact100/至少50来源工具。
 
-本次实例目录：`/home/zxc/CVPR_Evaluation_runtime/handover_curated_merge_20261024`。
-筛选结果28条（新14+旧14），原100中25条满足更严格完整投影门，另去11条近重复。
-正式可用状态以该目录的`CURATED_DATASET_READY.json`与生产读取记录为准；不自动训练或同步A100。
-
 ## 新14条与完整原100条合并并在A100微调
 
 `merge_handover_114.py` 使用独立 exact114 合同，完整保留新14条和原100条；
 0–13来自前述28包的新14，14–113依次来自原100的0–99。
 视频、DINO数组、归一化和动作保持原值，Parquet只重排episode/global/task索引。
 原100保持原physics-v2验收，新14保持各自原准入，不声称114条全部通过额外5mm投影门。
-本次本地目录为 `/home/zxc/CVPR_Evaluation_runtime/handover_merged114_20261025`，
 训练数据位于 `packed/train`、真实特征位于 `dino`；共49,089帧、42,363完整训练窗。
 `pack`、`cache`、`verify`依次构建并验收；`MERGED114_DATASET_READY.json`绑定本地就绪结果。
 
@@ -356,8 +320,7 @@ python scripts/4090_simple/finetune_lift_box_hold_joint.py \
 256×320 clean DINO历史及VLM颜色增强，保持独立5集/40窗VAL，不使用TRAIN作验证。
 正式配置固定8卡、每卡8、累积1、全局64、10000次optimizer更新、1000步warmup。
 每1000步保存并保留全部模型权重；仅本新run超过最近两份的optimizer/scheduler/RNG会移除，
-旧run和旧数据保留。实际更新2/20/最终步检查各卡有限性、参数探针一致性及内存，
-单次短检查不代表完整训练或策略成功率已通过。
+旧run和旧数据保留。
 
 ## PICO 仿真遥操作采集
 

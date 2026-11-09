@@ -1,21 +1,8 @@
 # VLMExpert
 
-首次使用请从[环境与路径配置](../docs/setup/README.md)、[复现实验入口](../docs/reproduction/README.md)和
-[上游依赖说明](../docs/dependencies/README.md)开始。`scripts/configure_paths.py` 可生成本机基础路径文件
-`.local/configs/psi.local.env`；联合训练的可移植 Bash 示例为
-[`unifolm.env.example.sh`](../configs/machines/unifolm.env.example.sh)。
-下文原任务的绝对路径、权重身份和 `unifolm-local.env.sh` 保留追溯，新用户须选择自己的数据、权重和验收记录。
+使用方法见[使用说明](../docs/reproduction/README.md)，联合训练的路径示例见[`unifolm.env.example.sh`](../configs/machines/unifolm.env.example.sh)。
 
 ## 本仓库扩展：双来源 Action Expert
-
-A100的Handover任务适配见[38k联合权重初始化、任务微调20k步](../docs/A100_SIMPLE_TASK50_FINETUNE.md)：
-保留已训练动作头、VLM及Motion，八卡batch32，每4k保存，沿用原归一化并记录本地损失和实测ETA。
-融合AdamW的完整状态对照、checkpoint边界暂停及数据流恢复规则也记录在该文档中；
-默认新任务入口仍使用普通AdamW，恢复入口只在验证报告通过后启用fused。
-当前独立38k融合重跑已通过同梯度优化器对照和八卡第2、20步检查并保存20步恢复快照；
-这是用户接受重算后从任务第0步开始的新运行，完整20k训练和物理效果尚未验收。
-38k任务首次保存前故障的重跑使用独立`a100_task_fused_restart.py`入口：受控同梯度验证通过后
-从任务0步重建优化器，不继承UnifoLM优化器或冒充恢复2345步；保存及诊断规则见上述任务文档。
 
 `action_architecture="dual_source_v1"` 实现双来源串行结构。当前 UnifoLM 配方设置
 `tune_vlm=True, tune_motion=True`，联合更新 VLM、MotionExpert 与新 action expert；DINO 保持冻结。
@@ -204,8 +191,6 @@ VLM 当前帧保持原动作查询的30Hz时刻。缺少真实一秒历史、跨
 当前 `vlm_color_clean_motion` 模式允许 VLM 独立 `img_aug=True`，Motion 全历史仍保持 clean。
 该策略不改变缓存 extractor、metadata 或特征字节，不需要重新提取；DINO 冻结不妨碍 MotionExpert 联合训练。
 只有改为增强 Motion 输入时，才需在线编码同步增强后的六帧，不能在 clean DINO 特征上补做等价颜色增强。
-数据与 GPU 验证范围见 [UnifoLM 验证记录](../docs/unifolm_dino_validation.json)。
-新颜色策略的 CPU 验证见 [UnifoLM 分支增强验证记录](../docs/unifolm_vlm_color_validation.json)。
 
 ### UnifoLM 联合训练配方
 
@@ -216,101 +201,6 @@ VLM 当前帧保持原动作查询的30Hz时刻。缺少真实一秒历史、跨
 `MOTION_USE_EMA=1/0` 指定初始化权重选择。
 数据 wrapper 自动把已完成的原生 DINO 缓存接入 `motion_img_embs`，并将同源、同时间的当前 RGB 交给所选策略处理；
 缺少或未完成的缓存明确报错，下载 ZIP 本身不会自动产生 DINO。
-
-#### 本机固定初始化
-
-[unifolm-local.env.sh](scripts/train/psi0/unifolm-local.env.sh) 固定本次选用的本地 Qwen3-VL
-（目录名含 `ego200k.he30k`）、MotionExpert 第100轮（`epoch=99-step=48700.ckpt`，EMA）、train／val 数据与缓存路径，
-以及已对齐的独立 Python3.11／Torch2.7 环境。该文件只导出配置，不创建环境或启动训练。
-`UNIFOLM_RUN_ROOT` 将训练输出设为仓库外的 `/gaozt-test1/datasets/UnifoLM/.pipeline/training`。
-从仓库根目录检查输入与最终命令：
-
-```bash
-source VLMExpert/scripts/train/psi0/unifolm-local.env.sh
-bash VLMExpert/scripts/train/psi0/posttrain-dual-source-unifolm.sh --check-only dual_source_unifolm_local
-```
-
-本地权重验收记录为
-[`posttrain_initialization_weights.json`](/gaozt-test1/datasets/UnifoLM/.pipeline/posttrain_initialization_weights.json)，
-包含路径、大小、mtime、完整 SHA256 及 tokenizer／processor 身份。Qwen 当前实测 SHA256 为
-`db31e5dd953f68febc11330f5a436a37d3bd02b735e206503f2cf000faad616c`，与旧 HF 下载旁路记录不同；
-本次保留用户选定的本地文件，不将该 SHA 声称为远端官方校验通过。
-配置中的 `UNIFOLM_INIT_WEIGHTS_RECORD` 使 `--check-only` 和实际启动先核对权重路径、大小、mtime、
-tokenizer／processor 小文件哈希及 EMA 选择；检查通过不表示环境或 GPU 联调已通过。
-如文件发生变化或需要重新校验，可手动运行以下完整哈希检查，
-无需在每次训练启动时重新扫描约10GB权重：
-
-```bash
-printf '%s  %s\n' \
-  "$EGO_DEX_VLM_SHA256" "$EGO_DEX_VLM_PATH/model.safetensors" \
-  "$MOTION_EXPERT_SHA256" "$MOTION_EXPERT_CHECKPOINT" | sha256sum --check
-```
-
-独立环境位于 `/gaozt-test1/datasets/UnifoLM/.pipeline/runtimes/psi0-py311-torch270-cu126`，
-使用 Python3.11.15、Torch2.7.0/CUDA12.6、Torchvision0.22.0、Transformers4.57.1、
-Accelerate1.7.0 和 FlashAttention2.7.4.post1。NumPy1.26.4、Pillow11.3.0、PyAV16.0.1
-与缓存图像处理环境一致；LeRobot 固定在 `09929d8057b044b53aecaf5c6d7eb71f99e8beb9`，
-`psi` editable 指向当前仓库。旧环境保留。环境重建可在仓库根目录执行：
-
-```bash
-source VLMExpert/scripts/train/psi0/unifolm-local.env.sh
-UV_PROJECT_ENVIRONMENT="${PSI_PYTHON%/bin/python}" uv sync \
-  --project VLMExpert --group psi --locked --python 3.11 --inexact
-uv pip install --python "$PSI_PYTHON" --no-deps \
-  'https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1%2Bcu12torch2.7cxx11abiTRUE-cp311-cp311-linux_x86_64.whl'
-```
-
-该 FlashAttention wheel 对应 Python3.11、Torch2.7、CUDA12、C++11 ABI；后续同步环境保留
-`--inexact`，避免删除单独安装的 FlashAttention。入口允许直接使用已导出的环境变量，`.env` 为可选补充。
-真实处理器、LeRobot 解码及 collator 验收见
-[`psi0_runtime_validation.json`](/gaozt-test1/datasets/UnifoLM/.pipeline/psi0_runtime_validation.json)。
-缓存、固定初始化、环境及完整模型 GPU 联调四项均已完成。
-2026-10-19已按用户授权启动八卡正式后训练，运行状态见下文。
-
-#### 完整模型 GPU 验收
-
-[完整验收记录](../docs/unifolm_full_model_validation.json) 使用上述本地 Qwen3-VL、Motion 第100轮 EMA、
-真实 UnifoLM train／val 及完整 `1536×6` 双来源 action expert，共约30.13亿参数。
-Motion 输入完整11个 hidden，并将其均值作为 `p_M`；VLM 使用最后层有效 token 及 masked mean `p_V`。
-使用 A100 80GB、FP32 主参数、BF16 autocast 和 AdamW `foreach=False`，均累积2步；
-单卡／双卡完成4次更新，新增八卡检查完成8次更新：
-
-| GPU × 每卡 batch | 峰值 allocated／reserved（GiB，取各卡最大值） | 结果 |
-| --- | --- | --- |
-| 1 × 1 | 48.55／51.13 | 前后向、五个参数组更新、采样均通过 |
-| 1 × 16 | 51.78／54.61 | 完整 batch 前后向与更新通过 |
-| 2 × 1 | 59.94／62.63 | 连续4次更新后两卡完整模型 SHA256 每次均一致；实际使用 NCCL P2P |
-| 8 × 16 | 63.15／65.95 | 8次更新后八卡完整模型 SHA256 每次均一致；五组参数均更新，实际使用 NCCL P2P |
-
-2026-10-19 的 [八卡 batch16 验收记录](../docs/unifolm_8gpu_batch16_validation.json) 覆盖2048个不同训练窗口，
-常规有效全局 batch为 `8×16×2=256`。八份报告全部通过，损失、clip前梯度和更新后参数均有限，
-VLM／Motion 完整tokens及两个pooling分支均收到非零梯度；冻结参数与clean DINO输入保持不变。
-PyTorch峰值 allocated／reserved 为63.15／65.95 GiB；另以1秒间隔采样 NVML，驱动占用最高67.07 GiB。
-八卡采样与checkpoint保存通过，进程正常退出并释放全部GPU占用；本次没有重复八卡冷恢复。
-
-单卡和双卡均从保存文件恢复完整模型、所有 AdamW 状态、scheduler 及 Python／NumPy／CPU／当前 CUDA RNG，
-恢复后的同输入预测逐位一致，再完成1次真实更新；双卡续跑后完整模型 SHA256 仍一致。
-双卡续跑峰值 allocated／reserved 为60.04／63.26 GiB。
-另用 `Psi0Model.from_pretrained` 冷加载保存结果，按相同精度比较预测，最大差异为0，峰值 allocated 8.18 GiB。
-同时修复了 Motion 共享位置编码被 safetensors 去重后无法严格加载，以及 Rich 日志文件链接消耗 Python RNG 的问题。
-本环境的数据／运行时回归100项、最终 checkpoint／模型集成回归91项分别通过，两套检查有重叠。
-
-可复用 [有限步数验收脚本](scripts/validation/validate_unifolm_full_model.py)；该入口只执行4～8次验收更新，
-不调用正式训练循环。以下为八卡每卡batch16检查示例，输出仍放在仓库外：
-
-```bash
-source VLMExpert/scripts/train/psi0/unifolm-local.env.sh
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 NCCL_IB_DISABLE=1 NCCL_P2P_DISABLE=0 NCCL_SHM_DISABLE=0 \
-  "$PSI_PYTHON" -m torch.distributed.run --standalone --nproc_per_node=8 \
-  VLMExpert/scripts/validation/validate_unifolm_full_model.py --mode train \
-  --batch-size 16 --accumulation 2 --updates 8 \
-  --output-dir "$UNIFOLM_DINO_ROOT/.pipeline/runs/full-model-new-check"
-```
-
-上述显存来自独立的限定步数检查，不代表正式吞吐；历史验收JSON中的未启动标记是该报告生成时的状态。
-GPU验收使用真实数据、collator和Accelerator，但在主进程解码（workers0），未验收正式多worker吞吐。
-此前单／双卡恢复检查覆盖状态恢复和继续更新，未验收中断前后数据游标逐步重放。
-HTTP／机器人历史缓冲的服务接线仍单独验收。
 
 | 参数组 | 初始学习率 | 来源 |
 | --- | --- | --- |
@@ -336,7 +226,7 @@ Motion 仅冻结当前 hidden 接口不使用的运动输出头、被完整遮�
 
 #### 学习率与有效 batch 的选择
 
-2026-10-19 按当前方案，新 action head 与 VLM 的分组学习率保持 Ψ₀ 一致，重点比较引入全身运动先验的方法。
+新 action head 与 VLM 的分组学习率保持 Ψ₀ 一致。
 建议 MotionExpert 的峰值 LR 保持 `1e-5`，batch 保持 **8卡 × 每卡16 × 累积2步 = 常规有效全局 batch256**。
 这是一组有论文依据、且通过八卡运行检查的初值，尚未做收敛最优性比较。
 正式脚本需显式设置 `NPROC_PER_NODE=8`；只设置 `CUDA_VISIBLE_DEVICES` 不会改变该脚本默认的单进程数。
@@ -357,7 +247,7 @@ Motion 仅冻结当前 hidden 接口不使用的运动输出头、被完整遮�
 作为已预训练运动主干的适配起点较合理。当前本工程仅由action flow loss反传，
 WholeBodyWAM另保留motion prediction loss，不能据其结果保证我们的运动表示不会遗忘。
 若后续观察到验证误差或运动表示退化，可在固定batch256、数据顺序和样本预算下，
-将Motion `5e-6`作为更保守对照；本轮没有执行这项收敛实验。
+将Motion `5e-6`作为更保守对照。
 其他方法的global32／128对应不同模型、输入与示范预算，不能据此把Motion LR按32→256直接乘8。
 batch256继续匹配同数据的Ψ₀配方，保留1000步warmup和cosine，VLM与新头LR保持上表设定。
 
@@ -366,79 +256,15 @@ batch256对应约20,309次更新／遍，40k约为1.97遍窗口抽样；相邻30
 该数字不表示独立场景数量。Ψ₀同为40k更新；按本机对应的完整train pack原生5,416,386行算约1.89遍，
 本工程历史筛选后约1.97遍，两者均接近2遍。Accelerate在epoch尾可能刷新不足2个microbatch的累积，末次有效batch会较小。
 `PosttrainTrainer` 给 scheduler 的步数乘world size，与 Accelerate1.7每次同步更新内部推进world size次相抵；
-实际 warmup仍是1000次优化器更新。短时显存和参数一致性检查用于验收运行正确性，不能证明上述超参数最优。
+实际 warmup仍是1000次优化器更新。
 正式入口同时修复了history wrapper被误判为sharded数据、无法统计样本数的问题，
-以及epoch日志重复乘world size的问题；9项针对性CPU回归和真实4418行val历史wrapper长度检查通过。
-
-#### 正式训练、失败定位与重启
-
-2026-10-19按用户授权，从已固定的本地Qwen3-VL和Motion第100轮EMA开始联合训练，
-ActionExpert从头初始化；每卡batch16、8卡、累积2步，全局batch256，40k次更新、1000步warmup、cosine。
-五组峰值LR沿用上表，BF16 autocast、FP32主参数、AdamW `foreach=False`，每卡8个训练worker。
-当前任务不恢复之前的有限步数验收checkpoint。
-
-首次任务 `261019022505` 在完成735次更新后于2026-10-19 03:14 UTC由rank5触发
-`TensorCompare.cu::_assert_async_cuda_kernel`，随后NCCL watchdog退出；当时尚未到首次2000步保存点，
-没有可恢复的正式checkpoint。此前已落盘loss／梯度有限，不代表失败microbatch已通过检查。
-原日志与初始健康快照保留追溯，不能将该启动快照视为持续运行证明。
-
-本次修复让正式配方的train／val DataLoader显式使用`spawn`，避免在CUDA/NCCL初始化后fork；
-`num_workers=0`时不传进程专用选项。此运行约束见
-[PyTorch DDP文档](https://docs.pytorch.org/docs/2.7/generated/torch.nn.parallel.DistributedDataParallel.html)。
-验收入口复用生产`seed_everything`，记录实际确定性标志；此前短测仅设置RNG种子，漏掉了确定性CUDA索引路径。
-
-保持原Ψ₀的`Qwen3VLForConditionalGeneration.hidden_states[-1]`作为完整prefix tokens，仍对有效tokens做masked mean得到`p_V`。
-本地Transformers4.57.1的该输出位于最终decoder之后、末端norm之前；不将tokens另换成post-norm输出。
-因此三种trainer按原Ψ₀策略冻结不参与action loss的末端norm及未绑定的logits head，
-其余指定VLM组件继续训练；MotionExpert和新ActionExpert继续训练，DINO冻结。
-真实小型Qwen回归确认冻结前后tokens／`p_V`逐位相同，完整模型可训练参数为3,012,497,712。
-旧验收checkpoint的optimizer包含额外2048个无梯度norm参数，不直接恢复到修订后的optimizer布局。
-
-正式配方显式开启`training_safety_checks`：每microbatch在backward前全卡判定loss有限，
-同步更新时先unscale、再检查全部实际梯度、最后按原分组预算clip并更新。
-数值异常全卡拒绝更新，保存当前累积窗的CPU batch及Python／NumPy／CPU／当前CUDA RNG，
-通过独立Gloo组等待各卡诊断写完。健康步只保留有界内存快照。
-原生watchdog直接SIGABRT无法由Python异常处理保证捕获；定位窗口可显式设置
-`PSI0_DIAGNOSTIC_BATCH_RANGE=700:760`，按zero-based optimizer step在forward前原子覆盖每卡一份
-`diagnostics/latest_batch_rank_XXX.pt`，区间外停止健康步写盘。
-
-原rank5附近96个候选样本经真实sampler重放，原始与归一化数值、历史时间边和文本tokens检查通过。
-真实Motion／B16／1000步索引压力测试也通过，但缺少原735步权重，不能据此认定已复现原故障。
-八卡确定性模式检查与新增防护的实际trainer路径分别验收，范围和局限见
-[重启验收记录](../docs/unifolm_assert_repair_validation.json)。短测不能证明全程不会再异常。
-
-修订后optimizer布局已实际保存，并通过两卡B16、累积2步的冷启动恢复与继续更新：
-模型／AdamW／scheduler及各卡RNG校验值精确恢复，五组参数继续更新且跨卡全模型校验一致。
-该项复用同16个真实窗口，覆盖恢复路径；不代表数据游标重放或吞吐验收。
-同进程保存、扰动再热加载虽恢复状态一致，后续反传曾OOM；不将热加载列为已验收用法。
-正式恢复使用退出后重新启动的冷恢复路径，不缩小batch。
-
-实际进程、唯一timestamp、启动命令、配置、输出目录与日志路径记录在
-[`current_unifolm_training.json`](/gaozt-test1/datasets/UnifoLM/.pipeline/current_unifolm_training.json)。
-启动器为每次任务固定全部rank的同一timestamp，输出位于仓库外
-`/gaozt-test1/datasets/UnifoLM/.pipeline/training`，以独立进程组运行；具体任务以实时状态文件为准。
-当前没有W&B在线凭据，使用 `WANDB_MODE=offline` 在实际run目录保存本地指标、图像及W&B数据。
-第100／500／1000步增加早期checkpoint，此后每2000步及最终更新保存，严格保留最近3份；每5000步验证。
-不再豁免10k里程碑，按完整Adam状态估算写入时4份checkpoint峰值约135GiB，另计历史验收产物。
-既有循环还会在首次更新后执行一次20-batch验证，完成后继续训练；全局step按优化器更新计数。
-首次任务的启动信息见[历史启动快照](../docs/unifolm_training_start.json)，
-重启后的进度、同步执行调试设置与检查结果另记于重启验收记录及实时状态文件。
-
-修订任务`261019053758`已于2026-10-19 05:56 UTC启动，运行源码为`8e31af32`，
-保持原batch／学习率并启用`CUDA_LAUNCH_BLOCKING=1`。独立复核实际八卡配置与P2P通信通过，
-首轮20-batch验证loss为44.5111；第100步完整checkpoint约33.53GiB，模型header、optimizer ZIP目录、
-scheduler及全部8个rank RNG文件检查通过，冻结的VLM末端norm与初始化逐位相同。
-保存后已继续至少16次正常更新；截至2026-10-19 06:14 UTC的进度和指标见重启验收JSON，
-这些是有时间戳的早期检查，后续实时运行状态仍以外部状态文件和日志为准。
-
-数据准备与验证不启动训练。HTTP 双来源服务已接入真实历史缓冲与本机在线 DINO，
-协议与 CPU 回归见下文；真实 GPU、SONIC 控制与完整仿真仍须分别验收。
+以及epoch日志重复乘world size的问题。
 
 #### UnifoLM 提速与断点恢复
 
 提速入口 `scripts/train/psi0/posttrain-dual-source-unifolm-speedup.sh` 默认只做检查，
 只有显式 `--run` 才启动。普通配方仍默认关闭可选开关。
-本次恢复只采用用户授权的前三项：外部启动器设置 `CUDA_LAUNCH_BLOCKING=0`、
+可选优化包括：外部启动器设置 `CUDA_LAUNCH_BLOCKING=0`、
 跳过不用的词表输出、减少诊断输入搬运和重复指标同步；AdamW 保持 `foreach=False`。
 state token 仍在 action 序列首位；完整 VLM 最后一层 tokens、mask、masked mean `p_V`、
 完整11个 Motion tokens 与 mean `p_M` 均保留，VLM／Motion 继续反传。
@@ -449,7 +275,7 @@ state token 仍在 action 序列首位；完整 VLM 最后一层 tokens、mask�
 | `model.vlm_skip_unused_logits` | `False` | 外层 Qwen 使用 `logits_to_keep=1`；完整 hidden 序列及 pre-finalnorm 取层不变 |
 | `train.keep_train_batch_on_cpu` | `False` | 保留 Accelerate 分片；在 CPU 保存诊断快照，再由原训练步骤搬 GPU，避免额外 GPU→CPU 诊断拷贝 |
 | `train.sync_metrics_on_update_only` | `False` | 仅更新 microbatch 同步日志指标；每 microbatch loss gate、unscale 后梯度 gate、原分组裁剪均保留 |
-| `UNIFOLM_OPTIMIZER_FOREACH=True` | `False` | 独立可选项，可能增加峰值显存；本次不启用 |
+| `UNIFOLM_OPTIMIZER_FOREACH=True` | `False` | 独立可选项，可能增加峰值显存 |
 
 wrapper 不自行改变 `CUDA_LAUNCH_BLOCKING`，启动器须显式设置。
 日志 loss 仍为最后一个累积 microbatch 的跨卡均值，不是完整累积窗口均值。
@@ -467,45 +293,6 @@ CUDA_LAUNCH_BLOCKING=0 UNIFOLM_OPTIMIZER_FOREACH=False \
 不会解码跳过的样本；下一 epoch 清零偏移并复用 persistent workers。Iterable 流保留原跳过路径。
 此恢复方式不保存 DataLoader worker 的增强随机状态，不保证增强逐位重放。
 
-第14000步原始 checkpoint 已保留为不可随新任务轮转清理的恢复快照，
-原 run／checkpoint／W&B／曲线不覆盖。新任务使用新 timestamp 和目录，
-旧任务14000之后未保存的更新按用户选择重新计算。
-
-准备阶段的171项CPU回归见 [准备记录](../docs/unifolm_speedup_preparation_validation.json)。
-本次恢复新增5项CPU／双进程Gloo数据位置测试，覆盖spawn worker、分片、累积、下一epoch和奇数尾批；
-曲线及监控46项CPU回归通过。GPU验收使用八卡、B16、累积2，从同一14000快照分别冷恢复基线与提速配置，
-核对RNG、完整tokens／pooling契约、梯度、五组参数更新及连续跨卡参数一致性。
-生产配置各自通过4次带审计更新及8次独立计时更新，计时排除前2次；八卡连续参数一致、梯度有限且五组均更新。
-原生产路径重复运行自身也会发生多步数值分叉，最早出现在视觉反向；因此另在仅用于验收的确定性后端下对照同一快照的单次更新。
-该严格对照的八卡完整特征／pooling、来源梯度、视觉参数梯度和更新后完整模型逐位相同，没有放宽原比较容差。
-正式任务不启用这些额外确定性控制。短测基线约4.46秒／步，提速配置约2.51秒／步，
-重复归档输入的结果不代表完整数据吞吐。正式恢复任务已在北京时间2026-10-20 10:51启动；
-11:01:58验收时完成14073次更新，已落盘66次loss均值1.023，五组梯度有限且非零，学习率符合原cosine日程。
-跳过启动与前5次诊断写盘后的53次真实数据更新耗时206.16秒，约3.89秒／步，这是早期短窗口观察。
-新的周期验证尚未执行，下一次在完成15001更新后，下一完整checkpoint为16000。
-实际结果及续训状态见 [提速恢复记录](../docs/unifolm_speedup_resume_validation.json)。
-
-上述时间对应历史检查。该run随后在北京时间2026-10-20 12:06、最后完成15108次更新时，
-再次出现rank5原生CUDA断言；没有16000步checkpoint，恢复仍使用受保护的14000步完整快照。
-目前未精确复现故障，不修改MoE／Qwen索引计算或学习率。本轮恢复暂设 `CUDA_LAUNCH_BLOCKING=1`，
-保留词表输出与CPU输入／指标优化；吞吐可能降低，措施用于同步定位，并非已证明修复根因。
-详见 [两次断言及恢复边界](../docs/unifolm_assert_recovery_analysis.md)。
-
-持续诊断由显式环境变量 `PSI0_ROLLING_DIAGNOSTICS_DIR=/dev/shm/本次run专用目录` 开启：
-每rank仅保留两个update槽，分别保存当前累积窗口和前一个update的CPU batch／RNG，
-每次forward前原子替换；本轮正式B16×2八卡约占1.2GB主机内存，实际占用以落盘大小为准。
-写入临时文件时还需额外一份空间；I/O失败直接报错停止，避免丢失诊断后继续训练。
-原 `PSI0_DIAGNOSTIC_BATCH_RANGE=start:end` 仍支持有限区间调查；两者均未设置时不增加健康步写盘。
-tmpfs文件可跨训练进程退出保留，主机重启会丢失；故障后启动器将其归档到本次launch目录。
-这些文件只包含输入和RNG，不能替代模型／optimizer checkpoint。
-
-本轮按用户要求显式设置 `UNIFOLM_CHECKPOINTING_STEPS=1000`，每1000次完整更新保存模型、
-optimizer、scheduler与各卡RNG；下一次为15000，最多保留3份，受保护的14000步快照独立保留。
-未设置该变量时入口仍默认2000；`UNIFOLM_EARLY_CHECKPOINT_STEPS` 可指定额外已完成更新数，
-未设置时为 `100 500 1000`，本轮恢复后均已过去；两个变量的空串／非法项均拒绝启动。
-恢复历史曲线仅接续原run至14000步，再接本次新run，
-避免混入失败run中将被重算的14001–15108步。
-
 #### Loss 每100步持续绘图
 
 `scripts/analysis/monitor_training_loss.py` 是独立的 CPU 观察进程：默认每10秒只读控制台日志末尾，
@@ -518,11 +305,6 @@ W&B `_step=0` 对应第1次更新；分组为1–100、101–200，按同一步�
 不登录或同步 W&B。绑定 timestamp、run目录、训练PID及进程启动标识，遇到换run或训练结束自行退出，
 最后更新可读取到的数据；文件锁阻止同一输出目录出现重复监控。
 监控出错只记录并重试，不向训练进程发送信号。
-
-本轮恢复后的任务输出目录为
-`/gaozt-test1/datasets/UnifoLM/.pipeline/analysis/loss-100step-261020043942`；
-原 `loss-100step-261019053758` 与失败任务 `loss-100step-261020022152` 均保留归档。新 state 的 `loss_history_prefix` 绑定旧更新1–14000的冻结CSV及SHA256，
-提取时先验证前缀，再接新run的14001及之后记录，拒绝重叠；旧任务被回退的14000之后记录不混入新曲线。
 
 - `loss_100step.png`／`.svg`：全程概览、最近1000步逐步波动和最近500步完整均值放大；原始loss为浅灰细线，100步均值为细绿线，未满100步尾段为橙色虚线。均值放大图独立缩放纵轴，只绘制完整分组；没有额外平滑或插值。图片在同一路径原子替换，每100步刷新策略不变。
 - `loss_100step.csv`、`loss_per_update.csv`、`loss_summary.json`：均值及原始记录。
@@ -542,25 +324,7 @@ python3 VLMExpert/scripts/analysis/monitor_training_loss.py \
 ```
 
 `--mode status` 配合相同 `--state`／`--output-dir` 查看监控存活、最新渲染步数和下一刷新点。
-图表文件在后台更新；聊天里已经显示的图片是生成时的快照，重新打开文件可查看新版本。
 观察进程可独立退出；训练启动方式、学习率、batch及checkpoint保存均不受其控制。
-
-本轮在2026-10-20北京时间12:47重新启动独立观察进程，旧历史已接续至完整第14000步，
-下一刷新点为14100；实时心跳／错误和后续进度以新输出目录的 `monitor_status.json` 为准。
-15项CPU回归通过，覆盖真实W&B记录的去重／截断／缺步、窗口边界、日志未齐时重试、
-重复启动锁及训练退出同时最终绘图失败时仍能退出；真实本地记录的提取与PNG／SVG生成也已通过。
-
-```bash
-cd VLMExpert
-CUDA_VISIBLE_DEVICES='' OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
-  PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:..:. \
-  python -m pytest -p no:cacheprovider -q tests/test_vlm_features.py \
-    tests/test_dual_source_action.py tests/test_dual_source_integration.py tests/test_dual_source_data.py \
-    tests/test_dual_source_joint_training.py
-```
-
-原冻结基线见 [历史验证](../docs/dual_source_action_validation.json)；本轮联合训练验证见
-[联合训练验证记录](../docs/dual_source_joint_validation.json)。
 
 ## VLM tokens 池化接口
 
@@ -891,8 +655,6 @@ scripts/train/psi0/finetune-real-psi0.sh $task
 
 
 ### Open-Loop Evaluation
-> Follow the steps in `examples/simple/openloop_eval.ipynb`
-
 Load the training dataset, and run model inference to see how model fits the training data.
 
 ### Deployment
@@ -1098,14 +860,6 @@ reset期间仍在执行的旧episode推理结果以HTTP409丢弃。
 `/info` 返回接口与权重身份。`/observe`不持有模型推理锁。
 服务以 `eval()`、冻结参数、`no_grad` 推理；test-time RTC 仅在动作样本上局部计算 VJP。
 
-CPU 回归使用专家替身，验证上述 HTTP／时间戳／RTC／reset／身份拒绝逻辑，
-不代表真实模型、GPU或物理闭环通过：
-
-```bash
-CUDA_VISIBLE_DEVICES='' /home/zxc/miniconda3/envs/cvpr-simple-model311/bin/python \
-  -m unittest discover -s VLMExpert/tests -p test_dual_source_serving.py -v
-```
-
 We use [SIMPLE](https://github.com/physical-superintelligence-lab/SIMPLE) to benchmark $\Psi_0$ and all the baselines.
 
 > 📢 SIMPLE is an easy-to-use humanoid benchmarking simulator built on the MuJoCo physics engine and Isaac Sim rendering.
@@ -1182,9 +936,7 @@ uv run --active --group psi --group serve serve_psi0 \
 
 For Intel XPU, add `--device xpu:0` to the command above.
 
-Run open-loop evaluation (offline)
 
-[examples/simple/openloop_eval.ipynb](examples/simple/openloop_eval.ipynb)
 
 #### Run the Evaluation in SIMPLE
 

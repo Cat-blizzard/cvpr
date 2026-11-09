@@ -1,11 +1,8 @@
 # 环境与数据迁移
 
-新机器请先按[安装与路径配置](setup/README.md)生成本机配置，并从[复现实验入口](reproduction/README.md)选择命令。
-`scripts/configure_paths.py` 会同时重定位归档、划分、统计、视觉缓存、窗口缓存和输出路径；
-仅修改一个数据根目录不足以迁移完整任务。下文保留原迁移过程与既有任务的路径和身份边界。
+数据、模型和输出路径的配置方法见[配置说明](../configs/README.md)。
 
 MotionExpert、pipeline和ImageProcess的当前接口以各自README为准。
-旧运动实验、旧dense归档、旧视觉特征和旧Motion checkpoint已清理。
 Git仓库不包含训练数据、模型权重或运行环境。
 
 ```bash
@@ -78,7 +75,6 @@ cp .env.sample .env
 
 `.env` 中的 `PSI_HOME`、数据、缓存和日志路径按本机设置，数据、权重、checkpoint和运行环境放在仓库外。
 CUDA、XPU、Docker、训练和部署的具体要求见 [官方README](../VLMExpert/README.md)。
-本次只同步源代码，没有安装或替换任何现有环境。
 
 官方README仍有引用已移除脚本的旧示例；启动前以实际 `scripts/train/psi0/` 脚本和
 `pyproject.toml` 注册入口为准。当前 `serve_psi0_simple` 仍硬性检查CUDA，未验收其XPU路径。
@@ -96,4 +92,3 @@ SIMPLE、cuRobo、Isaac Sim、机器人SDK等运行环境仍需按相应上游�
 具体排除路径见版本记录，使用相应场景或机器人模型前从固定上游版本另行准备。
 展开依赖内的 `.gitattributes` 不复制，由根仓库统一管理Git LFS资源。
 保留原有必要的归一化及人体模型资源，不把训练权重重新提交到Git。
-仿真、真机部署及模型训练尚需在专用环境中验收；源码一致性与CPU测试不代表已通过这些运行验收。

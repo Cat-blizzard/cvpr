@@ -1,16 +1,12 @@
 # MixEgoMotion：当前数据与 DINO 提取
 
-新机器的入口见[安装与路径配置](../docs/setup/README.md)和[复现实验入口](../docs/reproduction/README.md)。
-运行 `scripts/configure_paths.py` 生成 `.local/configs/dino.local.json`；公开的固定版本示例为
-[`configs/dino.example.json`](configs/dino.example.json)。本页绝对路径和八卡参数记录原部署环境，需使用本机配置覆盖。
+提取配置见[配置说明](../configs/README.md)和[`configs/dino.example.json`](configs/dino.example.json)。
 
 当前 pipeline 只负责从已验收的 SMPL-H 运动归档和原始相机视频提取新 DINO 特征。
-历史 dense 转换、拟合实验、迁移和全量数值审计脚本已清理。
 当前训练目标为 `smplh-parameters-v4-camera-quality`，运动质量修订由MotionExpert负责，
 已提取的原生30Hz DINO及join复用相同字节，不需要为运动mask修订重新提取。
 原v1/v2/v3目录保留追溯，下方示例使用v4路径。相机原生质量修订继承v3的FK验收，
 新增camera point/transition mask，MotionExpert检查5Hz间全部原生边，避免跨跟踪中断生成有效增量。
-新缓存、新全train统计与当前模型GPU验收完成前不能启动训练，本次不自动启动训练。
 
 ## 保留的数据
 
@@ -40,7 +36,6 @@ MixEgoMotion/
 
 原分割为 train 7,409、val 915、test 939 episodes，见 `meta/splits.json`。
 47段HM隔离记录保留；训练按 `training_eligible` 与窗口mask过滤。
-已通过的运动数值验收不重复执行。
 
 `motion.parquet` 保留：
 
@@ -98,12 +93,11 @@ vision_profiles/psi0_256x480_v1_30hz/
 提取恢复只复用同配置、同来源、同文件身份的已完成episode。
 坏帧不提升为有效，输出mask必须与原始来源mask相同，否则正式提取或训练拒绝。
 训练要求完整 `complete/all` manifest与同一归档、分割、图像profile绑定。
-视觉尺寸变化本身不要求重算运动统计；本次相机质量mask变化，需要新全train统计。视觉版本另行写入checkpoint。
+视觉尺寸变化本身不要求重算运动统计；相机质量mask变化时需要重新计算全train统计。视觉版本另行写入checkpoint。
 
 ## 全量提取命令
 
-从仓库根目录执行。当前环境和预训练权重已就绪，无需重新下载。
-本次运动质量修订复用已有完整视觉缓存，不需要执行以下命令。
+从仓库根目录执行。
 以下为另行重提取任务的命令示例，完整数据约781GB float32特征，另加join和凭证；同命令恢复只复用匹配来源和配置的产物。
 CLI固定原生30Hz，无需指定fps。当前选定BF16、每进程batch128、每卡2个DINO进程，8卡共16个进程。
 每个进程保留8个PIL预处理线程、4个解码线程和2批预取；输出仍为float32。

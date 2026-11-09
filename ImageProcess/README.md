@@ -144,14 +144,3 @@ managed by the caller; this image processor does not create missing history.
 Current data and extraction commands are documented in
 [pipeline](../pipeline/README.md); fresh training and differentiable hidden-token
 interfaces are documented in [MotionExpert](../MotionExpert/README.md).
-
-## CPU checks
-
-```sh
-python -m unittest discover -s ImageProcess/tests -v
-```
-
-Tests cover both profiles, reference pixel geometry, synchronized historical and
-current images, JSON replay, local RNG, augmentation bounds, and invalid inputs.
-When torchvision is installed, a pixel-level reference test also compares the
-crop and color operations to its PIL implementation. No model download is used.
