@@ -2,6 +2,8 @@
 
 面向第一视角运动预测与全身动作学习的研究代码，包含 MotionExpert、共享图像处理、DINO 特征提取，以及在固定 Ψ₀ 上游快照上加入的双来源 Action Expert。
 
+运行平台以 **Ubuntu 22.04 LTS** 为目标，命令示例使用 Bash。WSL 2 中的 Ubuntu 可用于路径配置和 CPU 离线检查；GPU 训练与仿真仍按各自环境和资源完成验收。
+
 MotionExpert 在 5Hz 上读取历史 5 帧与当前帧，联合重建历史运动并预测未来 5 帧；完整 11 个 motion hidden 可供下游使用并参与反向传播。VLMExpert 的 `dual_source_v1` 将 VLM tokens 与 motion hidden 接入动作专家。输入、坐标、视觉尺寸和缓存身份约定见 [数据与模型协议](docs/protocols/README.md)。
 
 ## 从这里开始

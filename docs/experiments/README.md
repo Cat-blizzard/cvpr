@@ -4,6 +4,8 @@
 
 新环境的规范入口见 [复现说明](../reproduction/README.md)，本机目录设置见 [路径配置](../../configs/README.md)。
 
+仓库工具的最新本机检查见 [2026-11-09 Ubuntu 离线验证](ubuntu-validation-2026-11-09.md)。
+
 ## 训练与接口验收
 
 | 内容 | 原始记录 |
