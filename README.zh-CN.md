@@ -10,53 +10,15 @@
 
 ## 路径配置
 
-使用默认目录生成配置：
+默认配置已包含在仓库中：
 
-```bash
-python scripts/configure_paths.py
-```
-
-默认目录为 `~/sigma0/data`、`~/sigma0/models` 和 `~/sigma0/runs`。
-
-工具在 `.local/configs/` 下生成以下文件：
-
-| 文件 | 用途 |
+| 组件 | 配置文件 |
 | --- | --- |
-| `motion.local.json` | MotionExpert 训练与评估配置。 |
-| `dino.local.json` | DINO 特征提取配置。 |
-| `psi.local.env` | 合并到 `VLMExpert/.env` 的路径变量。 |
-| `paths.resolved.json` | 解析后的数据、模型和输出路径。 |
+| MotionExpert | [运动模型配置](MotionExpert/configs/smplh_k12_psi0_pretrain.yaml) |
+| DINO 特征提取 | [DINO 配置](pipeline/configs/dino.json) |
+| 双来源联合训练 | [联合训练环境配置](configs/unifolm.env.sh) |
 
-`--dry-run` 用于预览路径，`--output-dir` 指定其他配置目录，`--force` 覆盖已有配置文件。
-
-<details>
-<summary>自定义路径</summary>
-
-需要使用其他目录时，复制示例，修改 `data_root`、`model_root` 和 `run_root`，然后重新生成配置：
-
-```bash
-mkdir -p .local
-cp configs/machines/local.example.json .local/machine.json
-# 编辑 .local/machine.json。
-python scripts/configure_paths.py --machine .local/machine.json --force
-```
-
-还可为以下资源单独指定路径：
-
-| 字段 | 资源 |
-| --- | --- |
-| `archive_root` | SMPL-H 运动归档。 |
-| `stats_path` | 运动归一化统计。 |
-| `vision_profile_root` | DINO 特征目录。 |
-| `window_cache_root` | 运动训练窗口缓存。 |
-| `motion_output_dir` | 运动训练输出目录。 |
-| `dino_checkpoint` | 已存在的本地 DINO 模型目录；省略时使用固定版本的官方模型。 |
-
-相对路径以机器 JSON 文件所在目录为基准。路径支持 `~`、`$NAME` 和 `${NAME}`。Motion 归档路径的优先级依次为 `--data-dir`、`MOTIONEXPERT_DATA_DIR`、配置文件。
-
-自定义配置再次生成时，继续传入同一份 `--machine` 文件；下方数据准备命令也使用对应的目录。
-
-</details>
+默认目录为 `~/sigma0/data`、`~/sigma0/models` 和 `~/sigma0/runs`。可直接修改配置文件中的路径和参数；MotionExpert 和 DINO 也支持通过 `--config` 使用单独的配置文件。联合训练入口会自动加载 `configs/unifolm.env.sh`。
 
 ## 数据准备
 
@@ -83,7 +45,7 @@ VISION_ROOT="$ARCHIVE_ROOT/vision_profiles/psi0_256x480_v1_30hz"
 python -m egomotion_pipeline.cli extract-smplh-features \
   --dataset "$ARCHIVE_ROOT" \
   --output "$VISION_ROOT" \
-  --config .local/configs/dino.local.json
+  --config pipeline/configs/dino.json
 ```
 
 该输出目录与默认运动模型配置一致。提取参数见 [pipeline](pipeline/README.md)。
@@ -93,7 +55,7 @@ python -m egomotion_pipeline.cli extract-smplh-features \
 ### MotionExpert
 
 ```bash
-python -m MotionExpert.train --config .local/configs/motion.local.json --from-scratch
+python -m MotionExpert.train --from-scratch
 ```
 
 该配方默认使用 8 个 GPU、每卡 batch256。可通过 `--devices`、`--batch-size` 和 `--num-workers` 调整训练资源。
@@ -103,21 +65,19 @@ python -m MotionExpert.train --config .local/configs/motion.local.json --from-sc
 ```bash
 MOTION_RUN="$HOME/sigma0/runs/motion/smplh_k12_psi0_256x480_5hz_camera_quality_v4_meanpool_from_scratch"
 
-python -m MotionExpert.train --config .local/configs/motion.local.json \
+python -m MotionExpert.train \
   --resume "$MOTION_RUN/last.ckpt"
 ```
 
 ### 双来源动作专家
 
-将 EgoDex 预训练的 VLM 权重放在 `~/sigma0/models/egodex-vlm`。[UnifoLM 环境示例](configs/machines/unifolm.env.example.sh) 默认使用运动训练输出的 `final.ckpt` 和 `~/sigma0/data/UnifoLM` 下的数据：
+将 EgoDex 预训练的 VLM 权重放在 `~/sigma0/models/egodex-vlm`。[联合训练配置](configs/unifolm.env.sh) 默认使用运动训练输出的 `final.ckpt` 和 `~/sigma0/data/UnifoLM` 下的数据：
 
 ```bash
-cp configs/machines/unifolm.env.example.sh .local/unifolm.env.sh
-source .local/unifolm.env.sh
 bash VLMExpert/scripts/train/psi0/posttrain-dual-source-unifolm.sh
 ```
 
-需要使用其他权重或数据集时，调整 `.local/unifolm.env.sh`。双来源策略使用 6 个真实的 5Hz DINO 观测，末帧与 VLM 图像对齐。模型与训练参数见 [VLM Expert](VLMExpert/README.md)。
+需要使用其他权重或数据集时，调整 `configs/unifolm.env.sh`。双来源策略使用 6 个真实的 5Hz DINO 观测，末帧与 VLM 图像对齐。模型与训练参数见 [VLM Expert](VLMExpert/README.md)。
 
 ## 评估
 
@@ -128,7 +88,7 @@ MOTION_RUN="$HOME/sigma0/runs/motion/smplh_k12_psi0_256x480_5hz_camera_quality_v
 
 python -m MotionExpert.evaluate \
   --checkpoint "$MOTION_RUN/final.ckpt" \
-  --config .local/configs/motion.local.json \
+  --config MotionExpert/configs/smplh_k12_psi0_pretrain.yaml \
   --split val --max-samples 16 \
   --output "$HOME/sigma0/runs/evaluation/motion-val.json"
 ```

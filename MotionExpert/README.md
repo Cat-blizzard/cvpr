@@ -1,6 +1,6 @@
 # MotionExpert
 
-路径配置见[配置说明](../README.md#configuration)，训练与评估入口见[使用说明](../README.md#training)。以下命令从仓库根目录执行。
+默认配置为 [`configs/smplh_k12_psi0_pretrain.yaml`](configs/smplh_k12_psi0_pretrain.yaml)，可按需编辑路径。训练与评估入口见[项目首页](../README.md#training)。以下命令从仓库根目录执行。
 
 在5Hz上读取历史5帧＋当前帧图像，联合重建历史运动并预测未来5帧。当前帧与Ψ₀当前帧同源、同时间。
 后训练在完整高斯噪声 `t=1` 上执行一次网络调用，得到完整11个motion hidden供下游输入，同时提供mean pooling摘要；
@@ -108,7 +108,7 @@ EgoSuite原MCAP相机消息没有confidence字段，不伪造置信度；检查�
 
 ```bash
 MOTION_PY=python
-CONFIG=.local/configs/motion.local.json
+CONFIG=MotionExpert/configs/smplh_k12_psi0_pretrain.yaml
 CACHE="<WINDOW_CACHE_ROOT>"
 RAW_CACHE_REPORT="<RAW_CACHE_REPORT>"
 NORMALIZED_CACHE_REPORT="<NORMALIZED_CACHE_REPORT>"
@@ -182,7 +182,7 @@ FP16＋fused AdamW因不能保证pre-step时已unscale而拒绝；当前BF16＋�
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
 NCCL_IB_DISABLE=1 NCCL_P2P_DISABLE=0 NCCL_SHM_DISABLE=0 NCCL_SOCKET_IFNAME=lo \
 python \
-  -m MotionExpert.train --config .local/configs/motion.local.json --from-scratch
+  -m MotionExpert.train --config MotionExpert/configs/smplh_k12_psi0_pretrain.yaml --from-scratch
 ```
 
 输出目录由配置中的 `TRAIN.EXP_PATH` 指定。
@@ -193,7 +193,7 @@ Lightning启动DDP，无需另套torchrun。后续同架构续训须使用同一
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
 NCCL_IB_DISABLE=1 NCCL_P2P_DISABLE=0 NCCL_SHM_DISABLE=0 NCCL_SOCKET_IFNAME=lo \
 python \
-  -m MotionExpert.train --config .local/configs/motion.local.json \
+  -m MotionExpert.train --config MotionExpert/configs/smplh_k12_psi0_pretrain.yaml \
   --resume "<CHECKPOINT_100>" \
   --max-epochs 200
 ```
@@ -251,7 +251,7 @@ from egomotion_pipeline.features import DinoEncoder
 
 expert = MotionExpert(weights="new-run/checkpoint.ckpt", device="cuda", dtype=torch.float32,
                       use_ema=False).train()
-encoder = DinoEncoder(json.load(open(".local/configs/dino.local.json")))
+encoder = DinoEncoder(json.load(open("pipeline/configs/dino.json")))
 # 5Hz六个真实时刻，最后一帧就是Ψ₀当前帧。
 window = encoder.encode_window(history_rgb, stage="posttrain", seed=123)
 img_embs = torch.from_numpy(window["img_embs"])[None].to("cuda")

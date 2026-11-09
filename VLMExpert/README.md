@@ -1,6 +1,6 @@
 # VLM Expert
 
-使用方法见[使用说明](../README.md#training)，联合训练的路径示例见[`unifolm.env.example.sh`](../configs/machines/unifolm.env.example.sh)。
+使用方法见[项目首页](../README.md#training)，联合训练的默认路径配置为 [`configs/unifolm.env.sh`](../configs/unifolm.env.sh)。
 
 ## 本仓库扩展：双来源 Action Expert
 

@@ -1,6 +1,6 @@
 # MixEgoMotion：当前数据与 DINO 提取
 
-提取配置见[配置说明](../README.md#configuration)和[`configs/dino.example.json`](configs/dino.example.json)。
+默认提取配置为 [`configs/dino.json`](configs/dino.json)，可按需编辑。路径说明见[项目首页](../README.md#configuration)。
 
 ## 数据格式
 
@@ -81,7 +81,7 @@ vision_profiles/psi0_256x480_v1_30hz/
 python -m egomotion_pipeline.cli extract-smplh-features \
   --dataset "<ARCHIVE_ROOT>" \
   --output "<VISION_ROOT>" \
-  --config .local/configs/dino.local.json \
+  --config pipeline/configs/dino.json \
   --gpus 0 \
   --workers-per-gpu 1
 ```

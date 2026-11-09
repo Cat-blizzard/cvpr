@@ -10,53 +10,15 @@ Humanoid loco-manipulation requires a robot to preserve a hand-object interactio
 
 ## Configuration
 
-Generate the configuration with the default directories:
+Default configurations are included in the repository:
 
-```bash
-python scripts/configure_paths.py
-```
-
-The default directories are `~/sigma0/data`, `~/sigma0/models` and `~/sigma0/runs`.
-
-The tool writes the following files to `.local/configs/`:
-
-| File | Use |
+| Component | Configuration |
 | --- | --- |
-| `motion.local.json` | MotionExpert training and evaluation configuration. |
-| `dino.local.json` | DINO feature extraction configuration. |
-| `psi.local.env` | Path variables to merge into `VLMExpert/.env`. |
-| `paths.resolved.json` | Resolved data, model and output paths. |
+| MotionExpert | [Motion configuration](MotionExpert/configs/smplh_k12_psi0_pretrain.yaml) |
+| DINO feature extraction | [DINO configuration](pipeline/configs/dino.json) |
+| Dual-source training | [Joint training environment](configs/unifolm.env.sh) |
 
-Use `--dry-run` to preview paths, `--output-dir` to choose another configuration directory, and `--force` to replace existing configuration files.
-
-<details>
-<summary>Customize paths</summary>
-
-To use different directories, copy the example, edit `data_root`, `model_root` and `run_root`, and regenerate the configuration:
-
-```bash
-mkdir -p .local
-cp configs/machines/local.example.json .local/machine.json
-# Edit .local/machine.json.
-python scripts/configure_paths.py --machine .local/machine.json --force
-```
-
-Additional resources can be configured separately:
-
-| Field | Resource |
-| --- | --- |
-| `archive_root` | SMPL-H motion archive. |
-| `stats_path` | Motion normalization statistics. |
-| `vision_profile_root` | DINO feature directory. |
-| `window_cache_root` | Motion training window cache. |
-| `motion_output_dir` | Motion training output directory. |
-| `dino_checkpoint` | Existing local DINO model directory; otherwise the pinned official model is used. |
-
-Relative paths resolve against the machine JSON file. Paths support `~`, `$NAME` and `${NAME}`. Motion archive selection follows `--data-dir`, then `MOTIONEXPERT_DATA_DIR`, then the configuration file.
-
-Pass the same `--machine` file when regenerating a custom configuration, and use its paths in the data-preparation commands below.
-
-</details>
+The default directories are `~/sigma0/data`, `~/sigma0/models` and `~/sigma0/runs`. Edit the configuration files to adapt the paths and parameters. MotionExpert and DINO also accept `--config` for a separate configuration file. The joint training launcher loads `configs/unifolm.env.sh` automatically.
 
 ## Data Preparation
 
@@ -83,7 +45,7 @@ VISION_ROOT="$ARCHIVE_ROOT/vision_profiles/psi0_256x480_v1_30hz"
 python -m egomotion_pipeline.cli extract-smplh-features \
   --dataset "$ARCHIVE_ROOT" \
   --output "$VISION_ROOT" \
-  --config .local/configs/dino.local.json
+  --config pipeline/configs/dino.json
 ```
 
 This output directory matches the default Motion configuration. Feature extraction options are described in [pipeline](pipeline/README.md).
@@ -93,7 +55,7 @@ This output directory matches the default Motion configuration. Feature extracti
 ### MotionExpert
 
 ```bash
-python -m MotionExpert.train --config .local/configs/motion.local.json --from-scratch
+python -m MotionExpert.train --from-scratch
 ```
 
 The recipe defaults to 8 GPUs and batch256 per GPU. Adjust `--devices`, `--batch-size` and `--num-workers` for your run.
@@ -103,21 +65,19 @@ Resume from the last saved checkpoint:
 ```bash
 MOTION_RUN="$HOME/sigma0/runs/motion/smplh_k12_psi0_256x480_5hz_camera_quality_v4_meanpool_from_scratch"
 
-python -m MotionExpert.train --config .local/configs/motion.local.json \
+python -m MotionExpert.train \
   --resume "$MOTION_RUN/last.ckpt"
 ```
 
 ### Dual-source action expert
 
-Prepare EgoDex-pretrained VLM weights in `~/sigma0/models/egodex-vlm`. The [UnifoLM environment example](configs/machines/unifolm.env.example.sh) uses the Motion training output's `final.ckpt` and data under `~/sigma0/data/UnifoLM`:
+Prepare EgoDex-pretrained VLM weights in `~/sigma0/models/egodex-vlm`. The [joint training configuration](configs/unifolm.env.sh) uses the Motion training output's `final.ckpt` and data under `~/sigma0/data/UnifoLM`:
 
 ```bash
-cp configs/machines/unifolm.env.example.sh .local/unifolm.env.sh
-source .local/unifolm.env.sh
 bash VLMExpert/scripts/train/psi0/posttrain-dual-source-unifolm.sh
 ```
 
-For other weights or datasets, adjust `.local/unifolm.env.sh`. The dual-source policy uses six real DINO observations at 5Hz, with the final observation aligned to the VLM image. Model and training options are described in [VLM Expert](VLMExpert/README.md).
+For other weights or datasets, adjust `configs/unifolm.env.sh`. The dual-source policy uses six real DINO observations at 5Hz, with the final observation aligned to the VLM image. Model and training options are described in [VLM Expert](VLMExpert/README.md).
 
 ## Evaluation
 
@@ -128,7 +88,7 @@ MOTION_RUN="$HOME/sigma0/runs/motion/smplh_k12_psi0_256x480_5hz_camera_quality_v
 
 python -m MotionExpert.evaluate \
   --checkpoint "$MOTION_RUN/final.ckpt" \
-  --config .local/configs/motion.local.json \
+  --config MotionExpert/configs/smplh_k12_psi0_pretrain.yaml \
   --split val --max-samples 16 \
   --output "$HOME/sigma0/runs/evaluation/motion-val.json"
 ```

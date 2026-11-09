@@ -20,7 +20,6 @@ __pycache__/
 .direnv/
 /.codex/
 /.local/
-/configs/machines/*.local.json
 /pipeline/configs/dino.local.json
 build/
 dist/
