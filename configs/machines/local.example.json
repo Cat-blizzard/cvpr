@@ -1,0 +1,5 @@
+{
+  "data_root": "~/cvpr-data",
+  "model_root": "~/cvpr-models",
+  "run_root": "~/cvpr-runs"
+}

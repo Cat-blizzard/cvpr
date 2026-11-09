@@ -1,3 +1,11 @@
+# VLMExpert
+
+首次使用请从[环境与路径配置](../docs/setup/README.md)、[复现实验入口](../docs/reproduction/README.md)和
+[上游依赖说明](../docs/dependencies/README.md)开始。`scripts/configure_paths.py` 可生成本机基础路径文件
+`.local/configs/psi.local.env`；联合训练的可移植 Bash 示例为
+[`unifolm.env.example.sh`](../configs/machines/unifolm.env.example.sh)。
+下文原任务的绝对路径、权重身份和 `unifolm-local.env.sh` 保留追溯，新用户须选择自己的数据、权重和验收记录。
+
 ## 本仓库扩展：双来源 Action Expert
 
 A100的Handover任务适配见[38k联合权重初始化、任务微调20k步](../docs/A100_SIMPLE_TASK50_FINETUNE.md)：

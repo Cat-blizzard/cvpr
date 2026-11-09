@@ -1,5 +1,10 @@
 # MotionExpert
 
+新机器请先阅读[安装与路径配置](../docs/setup/README.md)和[复现实验入口](../docs/reproduction/README.md)，
+使用 `scripts/configure_paths.py` 生成本机 `.local/configs/motion.local.json`，并通过 `--config` 显式传入。
+本页 `/gaozt-test1` 等绝对路径属于既有任务记录；原配置与源码保留其验收身份，不作为新机器的通用默认入口。
+只设置 `MOTIONEXPERT_DATA_DIR` 不会自动重定位统计、DINO 缓存和训练输出，完整迁移请使用生成的配置。
+
 在5Hz上读取历史5帧＋当前帧图像，联合重建历史运动并预测未来5帧。当前帧与Ψ₀当前帧同源、同时间。
 后训练在完整高斯噪声 `t=1` 上执行一次网络调用，得到完整11个motion hidden供下游输入，同时提供mean pooling摘要；
 该接口保留反传能力，下游模型不在本模块内。**没有可学习GLOBAL token。**
@@ -277,7 +282,7 @@ from egomotion_pipeline.features import DinoEncoder
 
 expert = MotionExpert(weights="new-run/checkpoint.ckpt", device="cuda", dtype=torch.float32,
                       use_ema=False).train()
-encoder = DinoEncoder(json.load(open("pipeline/configs/dino.local.json")))
+encoder = DinoEncoder(json.load(open(".local/configs/dino.local.json")))
 # 5Hz六个真实时刻，最后一帧就是Ψ₀当前帧。
 window = encoder.encode_window(history_rgb, stage="posttrain", seed=123)
 img_embs = torch.from_numpy(window["img_embs"])[None].to("cuda")

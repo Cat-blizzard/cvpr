@@ -1,5 +1,9 @@
 # 环境与数据迁移
 
+新机器请先按[安装与路径配置](setup/README.md)生成本机配置，并从[复现实验入口](reproduction/README.md)选择命令。
+`scripts/configure_paths.py` 会同时重定位归档、划分、统计、视觉缓存、窗口缓存和输出路径；
+仅修改一个数据根目录不足以迁移完整任务。下文保留原迁移过程与既有任务的路径和身份边界。
+
 MotionExpert、pipeline和ImageProcess的当前接口以各自README为准。
 旧运动实验、旧dense归档、旧视觉特征和旧Motion checkpoint已清理。
 Git仓库不包含训练数据、模型权重或运行环境。

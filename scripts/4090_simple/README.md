@@ -1,5 +1,10 @@
 # 4090 独立 SIMPLE 环境工具
 
+新机器先阅读[安装与本机路径](../../docs/setup/README.md)。资源默认根目录使用
+`CVPR_SIMPLE_RUNTIME`，未设置时为当前用户的 `~/CVPR_Evaluation_runtime`；PICO 采集与离线渲染的
+`--data-root` 优先于 `SIMPLE_DATA_DIR`，后者优先于 runtime 下的 `resources/simple_local_usd_v1`。
+历史 campaign、远端传输与权重身份仍按各专题的显式参数及原始记录核对，不能仅替换目录就视作验收完成。
+
 遵守 [交接文档](../../docs/4090_SIMPLE_HANDOFF.md)。本目录提供双Conda环境约束、
 本机路径、资源核验、真实历史／联合模型／HTTP检查及有界SIMPLE控制闭环工具。
 实际结果与未通过的边界见[GPU验收记录](../../docs/4090_SIMPLE_GPU_ACCEPTANCE.md)。

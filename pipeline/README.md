@@ -1,5 +1,9 @@
 # MixEgoMotion：当前数据与 DINO 提取
 
+新机器的入口见[安装与路径配置](../docs/setup/README.md)和[复现实验入口](../docs/reproduction/README.md)。
+运行 `scripts/configure_paths.py` 生成 `.local/configs/dino.local.json`；公开的固定版本示例为
+[`configs/dino.example.json`](configs/dino.example.json)。本页绝对路径和八卡参数记录原部署环境，需使用本机配置覆盖。
+
 当前 pipeline 只负责从已验收的 SMPL-H 运动归档和原始相机视频提取新 DINO 特征。
 历史 dense 转换、拟合实验、迁移和全量数值审计脚本已清理。
 当前训练目标为 `smplh-parameters-v4-camera-quality`，运动质量修订由MotionExpert负责，
@@ -115,7 +119,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
   -m egomotion_pipeline.cli extract-smplh-features \
   --dataset /gaozt-test1/datasets/MixEgoMotion/smplh-parameters-v4-camera-quality \
   --output /gaozt-test1/datasets/MixEgoMotion/smplh-parameters-v4-camera-quality/vision_profiles/psi0_256x480_v1_30hz \
-  --config pipeline/configs/dino.local.json \
+  --config .local/configs/dino.local.json \
   --gpus 0 1 2 3 4 5 6 7 \
   --workers-per-gpu 2
 ```
