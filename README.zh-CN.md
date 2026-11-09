@@ -10,16 +10,13 @@
 
 ## 路径配置
 
-以下命令从仓库根目录执行，将 `<...>` 占位符替换为自己的路径和参数。配置工具需要 PyYAML。
+使用默认目录生成配置：
 
 ```bash
-mkdir -p .local
-cp configs/machines/local.example.json .local/machine.json
-# 编辑 .local/machine.json 中的 data_root、model_root 和 run_root。
-python scripts/configure_paths.py --machine .local/machine.json
+python scripts/configure_paths.py
 ```
 
-数据、模型权重和输出放在仓库外。默认根目录为 `~/cvpr-data`、`~/cvpr-models` 和 `~/cvpr-runs`。
+默认目录为 `~/sigma0/data`、`~/sigma0/models` 和 `~/sigma0/runs`。
 
 工具在 `.local/configs/` 下生成以下文件：
 
@@ -33,9 +30,18 @@ python scripts/configure_paths.py --machine .local/machine.json
 `--dry-run` 用于预览路径，`--output-dir` 指定其他配置目录，`--force` 覆盖已有配置文件。
 
 <details>
-<summary>可选路径覆盖</summary>
+<summary>自定义路径</summary>
 
-资源分开存放时，可在 `.local/machine.json` 中添加以下字段：
+需要使用其他目录时，复制示例，修改 `data_root`、`model_root` 和 `run_root`，然后重新生成配置：
+
+```bash
+mkdir -p .local
+cp configs/machines/local.example.json .local/machine.json
+# 编辑 .local/machine.json。
+python scripts/configure_paths.py --machine .local/machine.json --force
+```
+
+还可为以下资源单独指定路径：
 
 | 字段 | 资源 |
 | --- | --- |
@@ -48,6 +54,8 @@ python scripts/configure_paths.py --machine .local/machine.json
 
 相对路径以机器 JSON 文件所在目录为基准。路径支持 `~`、`$NAME` 和 `${NAME}`。Motion 归档路径的优先级依次为 `--data-dir`、`MOTIONEXPERT_DATA_DIR`、配置文件。
 
+自定义配置再次生成时，继续传入同一份 `--machine` 文件；下方数据准备命令也使用对应的目录。
+
 </details>
 
 ## 数据准备
@@ -56,29 +64,29 @@ python scripts/configure_paths.py --machine .local/machine.json
 
 ```bash
 python datasets/download_egosuite.py run \
-  --output-dir "<DATA_ROOT>/EgoSuite" --hours "<HOURS>"
+  --output-dir "$HOME/sigma0/data/EgoSuite"
 
 python datasets/download_egoexo4d_hm.py \
-  --output-dir "<DATA_ROOT>/EgoExo-4D-HM" \
-  --aws-profile "<AWS_PROFILE>" --take "<TAKE_NAME>"
+  --output-dir "$HOME/sigma0/data/EgoExo-4D-HM"
 ```
+
+HM 下载器使用已配置的 AWS 凭据。下载量、数据选择和账户选项（`--hours`、`--take`、`--aws-profile`）见各脚本的 `--help`。
 
 运动训练需要 SMPL-H 归档、数据分割、归一化统计、DINO 特征和窗口缓存。归档与缓存的准备方法见 [MotionExpert](MotionExpert/README.md)，模型输入见[数据格式](docs/protocols/README.md)。
 
 使用归档及对应的原始相机视频提取 DINO 特征：
 
 ```bash
+ARCHIVE_ROOT="$HOME/sigma0/data/MixEgoMotion/smplh-parameters-v4-camera-quality"
+VISION_ROOT="$ARCHIVE_ROOT/vision_profiles/psi0_256x480_v1_30hz"
+
 python -m egomotion_pipeline.cli extract-smplh-features \
-  --dataset "<ARCHIVE_ROOT>" \
-  --output "<VISION_ROOT>" \
+  --dataset "$ARCHIVE_ROOT" \
+  --output "$VISION_ROOT" \
   --config .local/configs/dino.local.json
 ```
 
-将生成的特征目录填入 `.local/machine.json` 的 `vision_profile_root`，然后重新生成配置。提取参数见 [pipeline](pipeline/README.md)。
-
-```bash
-python scripts/configure_paths.py --machine .local/machine.json --force
-```
+该输出目录与默认运动模型配置一致。提取参数见 [pipeline](pipeline/README.md)。
 
 ## 训练
 
@@ -90,37 +98,42 @@ python -m MotionExpert.train --config .local/configs/motion.local.json --from-sc
 
 该配方默认使用 8 个 GPU、每卡 batch256。可通过 `--devices`、`--batch-size` 和 `--num-workers` 调整训练资源。
 
-恢复训练时，用 `--resume` 替换 `--from-scratch`：
+从最近保存的 checkpoint 恢复训练：
 
 ```bash
+MOTION_RUN="$HOME/sigma0/runs/motion/smplh_k12_psi0_256x480_5hz_camera_quality_v4_meanpool_from_scratch"
+
 python -m MotionExpert.train --config .local/configs/motion.local.json \
-  --resume "<CHECKPOINT>"
+  --resume "$MOTION_RUN/last.ckpt"
 ```
 
 ### 双来源动作专家
 
-复制 [UnifoLM 环境示例](configs/machines/unifolm.env.example.sh)，填写数据路径、VLM 权重、Motion checkpoint 和 DINO 缓存：
+将 EgoDex 预训练的 VLM 权重放在 `~/sigma0/models/egodex-vlm`。[UnifoLM 环境示例](configs/machines/unifolm.env.example.sh) 默认使用运动训练输出的 `final.ckpt` 和 `~/sigma0/data/UnifoLM` 下的数据：
 
 ```bash
 cp configs/machines/unifolm.env.example.sh .local/unifolm.env.sh
-# 编辑 .local/unifolm.env.sh。
 source .local/unifolm.env.sh
 bash VLMExpert/scripts/train/psi0/posttrain-dual-source-unifolm.sh
 ```
 
-双来源策略使用 6 个真实的 5Hz DINO 观测，末帧与 VLM 图像对齐。模型与训练参数见 [VLMExpert](VLMExpert/README.md)。
+需要使用其他权重或数据集时，调整 `.local/unifolm.env.sh`。双来源策略使用 6 个真实的 5Hz DINO 观测，末帧与 VLM 图像对齐。模型与训练参数见 [VLM Expert](VLMExpert/README.md)。
 
 ## 评估
 
+运动训练完成后，评估最终 checkpoint：
+
 ```bash
+MOTION_RUN="$HOME/sigma0/runs/motion/smplh_k12_psi0_256x480_5hz_camera_quality_v4_meanpool_from_scratch"
+
 python -m MotionExpert.evaluate \
-  --checkpoint "<CHECKPOINT>" \
+  --checkpoint "$MOTION_RUN/final.ckpt" \
   --config .local/configs/motion.local.json \
-  --split val --max-samples "<NUM_SAMPLES>" \
-  --output "<OUTPUT_PATH>"
+  --split val --max-samples 16 \
+  --output "$HOME/sigma0/runs/evaluation/motion-val.json"
 ```
 
-通过 `--split` 选择 `val` 或 `test`，通过 `--max-samples` 设置样本数量。运动推理与 hidden 特征提取见 [MotionExpert](MotionExpert/README.md)。
+该命令评估 16 个验证窗口。可通过 `--checkpoint`、`--split` 和 `--max-samples` 调整评估对象与规模。运动推理与 hidden 特征提取见 [MotionExpert](MotionExpert/README.md)。
 
 模型服务与仿真见 [SIMPLE 工具](scripts/4090_simple/README.md)，PICO 录制步骤见[遥操作](docs/teleoperation.md)。
 
@@ -131,7 +144,7 @@ python -m MotionExpert.evaluate \
 | [MotionExpert](MotionExpert/README.md) | 人类运动先验与运动预测。 |
 | [ImageProcess](ImageProcess/README.md) | 共享图像预处理与数据增强。 |
 | [pipeline](pipeline/README.md) | DINO 特征提取。 |
-| [VLMExpert](VLMExpert/README.md) | 视觉语言骨干网络与双来源动作专家。 |
+| [VLM Expert](VLMExpert/README.md) | 视觉语言骨干网络与双来源动作专家。 |
 
 ## 致谢
 

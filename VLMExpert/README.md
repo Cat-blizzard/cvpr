@@ -1,4 +1,4 @@
-# VLMExpert
+# VLM Expert
 
 使用方法见[使用说明](../README.md#training)，联合训练的路径示例见[`unifolm.env.example.sh`](../configs/machines/unifolm.env.example.sh)。
 

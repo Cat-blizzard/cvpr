@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
-# Copy to an ignored .local/unifolm.env.sh and edit for this machine.
-# This file only sets variables; it never installs dependencies or starts a run.
-# The JSON path generator is separate: shell defaults below are not read from JSON.
-export CVPR_DATA_ROOT="${CVPR_DATA_ROOT:-${HOME}/cvpr-data}"
-export CVPR_MODEL_ROOT="${CVPR_MODEL_ROOT:-${HOME}/cvpr-models}"
-export CVPR_RUN_ROOT="${CVPR_RUN_ROOT:-${HOME}/cvpr-runs}"
+# Source to use the default directory layout. Export variables first to override it.
+# Directory defaults are independent of the optional machine JSON file.
+export CVPR_DATA_ROOT="${CVPR_DATA_ROOT:-${HOME}/sigma0/data}"
+export CVPR_MODEL_ROOT="${CVPR_MODEL_ROOT:-${HOME}/sigma0/models}"
+export CVPR_RUN_ROOT="${CVPR_RUN_ROOT:-${HOME}/sigma0/runs}"
 
-# Select the exact compatible weights and complete their identity/acceptance checks.
-# These two names are placeholders, not downloadable or pre-accepted checkpoints.
+# Prepare the VLM weights and train MotionExpert before running joint training.
 export EGO_DEX_VLM_PATH="${EGO_DEX_VLM_PATH:-${CVPR_MODEL_ROOT}/egodex-vlm}"
-export MOTION_EXPERT_CHECKPOINT="${MOTION_EXPERT_CHECKPOINT:-${CVPR_MODEL_ROOT}/motionexpert/selected.ckpt}"
+export MOTION_EXPERT_CHECKPOINT="${MOTION_EXPERT_CHECKPOINT:-${CVPR_RUN_ROOT}/motion/smplh_k12_psi0_256x480_5hz_camera_quality_v4_meanpool_from_scratch/final.ckpt}"
 export MOTION_USE_EMA="${MOTION_USE_EMA:-1}"
 export UNIFOLM_DINO_ROOT="${UNIFOLM_DINO_ROOT:-${CVPR_DATA_ROOT}/UnifoLM}"
 export UNIFOLM_DINO_TRAIN_ID="${UNIFOLM_DINO_TRAIN_ID:-unifolm_sonic_lerobot_train}"

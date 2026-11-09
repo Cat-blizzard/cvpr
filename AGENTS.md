@@ -37,7 +37,7 @@
 - MotionExpert：运动训练、采样、一步 hidden、数据读取和归一化。
 - ImageProcess：统一 RGB 几何；按显式策略执行历史窗口共享增强或 VLM 独立颜色增强。
 - pipeline：从已验收的 SMPL-H 归档和原始相机数据提取 DINO 特征。
-- VLMExpert：保留原工程；仅在任务明确涉及它时修改。
+- VLM Expert（目录 `VLMExpert/`）：保留原工程；仅在任务明确涉及它时修改。
 - 用户限定“只修改某模块”时，严格遵守范围。
 
 ## 4. 数据与模型协议

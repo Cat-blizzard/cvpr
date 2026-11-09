@@ -6,7 +6,7 @@ Examples (Python >= 3.10; install requirements-egosuite.txt):
     python /cvpr/datasets/download_egosuite.py download
     python /cvpr/datasets/download_egosuite.py run --hours 250 --workers 4
 
-The default destination is ~/cvpr-data/EgoSuite, or $CVPR_DATA_ROOT/EgoSuite.
+The default destination is ~/sigma0/data/EgoSuite, or $CVPR_DATA_ROOT/EgoSuite.
 An explicit --output-dir takes priority. By default, cached
 durations or at most --sample-files MCAP summaries estimate the mean episode
 length. A fixed seed selects whole episodes for approximately --hours. Actual
@@ -44,7 +44,7 @@ import uuid
 
 BUCKET = "LightwheelAI/EgoStandard"
 PREFIX = "EgoStandard-body/mcap"
-DEFAULT_OUTPUT_DIR = Path(os.environ.get("CVPR_DATA_ROOT") or Path.home() / "cvpr-data").expanduser() / "EgoSuite"
+DEFAULT_OUTPUT_DIR = Path(os.environ.get("CVPR_DATA_ROOT") or Path.home() / "sigma0" / "data").expanduser() / "EgoSuite"
 REQUIRED_TOPICS = {
     "/pose/body", "/pose/left_hand", "/pose/right_hand",
     "/sensor/camera/head_left/video", "/sensor/camera/head_left/extrinsic",

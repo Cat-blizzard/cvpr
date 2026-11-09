@@ -1,6 +1,6 @@
 # 数据与模型协议
 
-本页汇总跨模块协作所需的稳定约定。具体字段和实现以 [MotionExpert](../../MotionExpert/README.md)、[ImageProcess](../../ImageProcess/README.md)、[pipeline](../../pipeline/README.md) 与 [VLMExpert](../../VLMExpert/README.md) 为准。
+本页汇总跨模块协作所需的稳定约定。具体字段和实现以 [MotionExpert](../../MotionExpert/README.md)、[ImageProcess](../../ImageProcess/README.md)、[pipeline](../../pipeline/README.md) 与 [VLM Expert](../../VLMExpert/README.md) 为准。
 
 ## 时间与条件输入
 

@@ -10,16 +10,13 @@ Humanoid loco-manipulation requires a robot to preserve a hand-object interactio
 
 ## Configuration
 
-Run the commands below from the repository root and replace `<...>` placeholders with your paths and values. The configuration tool requires PyYAML.
+Generate the configuration with the default directories:
 
 ```bash
-mkdir -p .local
-cp configs/machines/local.example.json .local/machine.json
-# Edit data_root, model_root and run_root in .local/machine.json.
-python scripts/configure_paths.py --machine .local/machine.json
+python scripts/configure_paths.py
 ```
 
-Store datasets, model weights and outputs outside the checkout. The default roots are `~/cvpr-data`, `~/cvpr-models` and `~/cvpr-runs`.
+The default directories are `~/sigma0/data`, `~/sigma0/models` and `~/sigma0/runs`.
 
 The tool writes the following files to `.local/configs/`:
 
@@ -33,9 +30,18 @@ The tool writes the following files to `.local/configs/`:
 Use `--dry-run` to preview paths, `--output-dir` to choose another configuration directory, and `--force` to replace existing configuration files.
 
 <details>
-<summary>Optional path overrides</summary>
+<summary>Customize paths</summary>
 
-Add these fields to `.local/machine.json` when resources are stored separately:
+To use different directories, copy the example, edit `data_root`, `model_root` and `run_root`, and regenerate the configuration:
+
+```bash
+mkdir -p .local
+cp configs/machines/local.example.json .local/machine.json
+# Edit .local/machine.json.
+python scripts/configure_paths.py --machine .local/machine.json --force
+```
+
+Additional resources can be configured separately:
 
 | Field | Resource |
 | --- | --- |
@@ -48,6 +54,8 @@ Add these fields to `.local/machine.json` when resources are stored separately:
 
 Relative paths resolve against the machine JSON file. Paths support `~`, `$NAME` and `${NAME}`. Motion archive selection follows `--data-dir`, then `MOTIONEXPERT_DATA_DIR`, then the configuration file.
 
+Pass the same `--machine` file when regenerating a custom configuration, and use its paths in the data-preparation commands below.
+
 </details>
 
 ## Data Preparation
@@ -56,29 +64,29 @@ Raw data downloaders:
 
 ```bash
 python datasets/download_egosuite.py run \
-  --output-dir "<DATA_ROOT>/EgoSuite" --hours "<HOURS>"
+  --output-dir "$HOME/sigma0/data/EgoSuite"
 
 python datasets/download_egoexo4d_hm.py \
-  --output-dir "<DATA_ROOT>/EgoExo-4D-HM" \
-  --aws-profile "<AWS_PROFILE>" --take "<TAKE_NAME>"
+  --output-dir "$HOME/sigma0/data/EgoExo-4D-HM"
 ```
+
+The HM downloader uses your configured AWS credentials. Download options, including `--hours`, `--take` and `--aws-profile`, are listed by each script's `--help`.
 
 Motion training uses an SMPL-H archive, split manifest, normalization statistics, DINO features and a window cache. See [MotionExpert](MotionExpert/README.md) for archive and cache preparation, and [data formats](docs/protocols/README.md) for model inputs.
 
 Extract DINO features from the archive and its original camera videos:
 
 ```bash
+ARCHIVE_ROOT="$HOME/sigma0/data/MixEgoMotion/smplh-parameters-v4-camera-quality"
+VISION_ROOT="$ARCHIVE_ROOT/vision_profiles/psi0_256x480_v1_30hz"
+
 python -m egomotion_pipeline.cli extract-smplh-features \
-  --dataset "<ARCHIVE_ROOT>" \
-  --output "<VISION_ROOT>" \
+  --dataset "$ARCHIVE_ROOT" \
+  --output "$VISION_ROOT" \
   --config .local/configs/dino.local.json
 ```
 
-Set `vision_profile_root` in `.local/machine.json` to the resulting feature directory and regenerate the configuration. Feature extraction options are described in [pipeline](pipeline/README.md).
-
-```bash
-python scripts/configure_paths.py --machine .local/machine.json --force
-```
+This output directory matches the default Motion configuration. Feature extraction options are described in [pipeline](pipeline/README.md).
 
 ## Training
 
@@ -90,37 +98,42 @@ python -m MotionExpert.train --config .local/configs/motion.local.json --from-sc
 
 The recipe defaults to 8 GPUs and batch256 per GPU. Adjust `--devices`, `--batch-size` and `--num-workers` for your run.
 
-To resume, replace `--from-scratch` with `--resume`:
+Resume from the last saved checkpoint:
 
 ```bash
+MOTION_RUN="$HOME/sigma0/runs/motion/smplh_k12_psi0_256x480_5hz_camera_quality_v4_meanpool_from_scratch"
+
 python -m MotionExpert.train --config .local/configs/motion.local.json \
-  --resume "<CHECKPOINT>"
+  --resume "$MOTION_RUN/last.ckpt"
 ```
 
 ### Dual-source action expert
 
-Copy the [UnifoLM environment example](configs/machines/unifolm.env.example.sh) and set the dataset paths, VLM weights, Motion checkpoint and DINO cache:
+Prepare EgoDex-pretrained VLM weights in `~/sigma0/models/egodex-vlm`. The [UnifoLM environment example](configs/machines/unifolm.env.example.sh) uses the Motion training output's `final.ckpt` and data under `~/sigma0/data/UnifoLM`:
 
 ```bash
 cp configs/machines/unifolm.env.example.sh .local/unifolm.env.sh
-# Edit .local/unifolm.env.sh.
 source .local/unifolm.env.sh
 bash VLMExpert/scripts/train/psi0/posttrain-dual-source-unifolm.sh
 ```
 
-The dual-source policy uses six real DINO observations at 5Hz, with the final observation aligned to the VLM image. Model and training options are described in [VLMExpert](VLMExpert/README.md).
+For other weights or datasets, adjust `.local/unifolm.env.sh`. The dual-source policy uses six real DINO observations at 5Hz, with the final observation aligned to the VLM image. Model and training options are described in [VLM Expert](VLMExpert/README.md).
 
 ## Evaluation
 
+Evaluate the final checkpoint after Motion training:
+
 ```bash
+MOTION_RUN="$HOME/sigma0/runs/motion/smplh_k12_psi0_256x480_5hz_camera_quality_v4_meanpool_from_scratch"
+
 python -m MotionExpert.evaluate \
-  --checkpoint "<CHECKPOINT>" \
+  --checkpoint "$MOTION_RUN/final.ckpt" \
   --config .local/configs/motion.local.json \
-  --split val --max-samples "<NUM_SAMPLES>" \
-  --output "<OUTPUT_PATH>"
+  --split val --max-samples 16 \
+  --output "$HOME/sigma0/runs/evaluation/motion-val.json"
 ```
 
-Choose `val` or `test` with `--split` and set the number of samples with `--max-samples`. Motion inference and hidden-feature extraction are described in [MotionExpert](MotionExpert/README.md).
+This evaluates 16 validation windows. Adjust `--checkpoint`, `--split` and `--max-samples` for other evaluations. Motion inference and hidden-feature extraction are described in [MotionExpert](MotionExpert/README.md).
 
 For policy serving and simulation, see [SIMPLE tools](scripts/4090_simple/README.md). PICO recording instructions are in [teleoperation](docs/teleoperation.md).
 
@@ -131,7 +144,7 @@ For policy serving and simulation, see [SIMPLE tools](scripts/4090_simple/README
 | [MotionExpert](MotionExpert/README.md) | Human motion prior and motion forecasting. |
 | [ImageProcess](ImageProcess/README.md) | Shared image preprocessing and augmentation. |
 | [pipeline](pipeline/README.md) | DINO feature extraction. |
-| [VLMExpert](VLMExpert/README.md) | Vision-language backbone and dual-source action expert. |
+| [VLM Expert](VLMExpert/README.md) | Vision-language backbone and dual-source action expert. |
 
 ## Acknowledgements
 

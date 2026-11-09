@@ -23,7 +23,7 @@
 各自归一化，并在线编码冻结DINO。共享处理见 [ImageProcess](../ImageProcess/README.md)。
 当前UnifoLM配方显式使用 `vlm_color_clean_motion`：只增强VLM当前帧颜色，Motion历史六帧复用
 clean 256×320 DINO缓存；两路保持同源、同时间、同几何profile，不启用随机裁切。
-具体策略见 [VLMExpert](../VLMExpert/README.md#本仓库扩展双来源-action-expert)。
+具体策略见 [VLM Expert](../VLMExpert/README.md#本仓库扩展双来源-action-expert)。
 真机先攒满约1秒历史再启用运动先验；接口要求6个真实时刻，不复制首帧补历史。
 
 训练保留历史轨迹模态dropout：每样本概率0.5开放前6帧有效18维相机轨迹。

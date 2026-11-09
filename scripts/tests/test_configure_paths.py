@@ -104,7 +104,7 @@ class ConfigurePathsTests(unittest.TestCase):
         self.assertEqual(local["data_root"], self.root / "data with spaces")
         self.assertEqual(local["model_root"], self.root / "models")
         self.assertEqual(local["run_root"], self.root / "runs")
-        self.assertEqual(config.resolve_path("~/cvpr-data", base=self.root, label="test"), Path.home() / "cvpr-data")
+        self.assertEqual(config.resolve_path("~/sigma0/data", base=self.root, label="test"), Path.home() / "sigma0/data")
 
     def test_accepts_utf8_bom_machine_file_from_windows_editors(self):
         self.machine.write_text(json.dumps(self.settings), encoding="utf-8-sig")
@@ -136,13 +136,19 @@ class ConfigurePathsTests(unittest.TestCase):
         other_cwd = self.root / "different cwd"
         other_cwd.mkdir()
         output = self.root / "not created/configs"
-        result = subprocess.run(
-            [sys.executable, "-B", str(SCRIPT), "--machine", str(self.machine), "--output-dir", str(output), "--dry-run"],
-            cwd=other_cwd, text=True, encoding="utf-8", capture_output=True, check=True,
-        )
-        plan = json.loads(result.stdout)
-        self.assertTrue(plan["dry_run"])
-        self.assertEqual(plan["paths"]["data_root"], str((self.root / "data with spaces").resolve()))
+        for machine_args, expected_root in (
+            ([], Path.home() / "sigma0/data"),
+            (["--machine", str(self.machine)], self.root / "data with spaces"),
+        ):
+            with self.subTest(machine_args=machine_args):
+                result = subprocess.run(
+                    [sys.executable, "-B", str(SCRIPT), *machine_args, "--output-dir", str(output), "--dry-run"],
+                    cwd=other_cwd, text=True, encoding="utf-8", capture_output=True, check=True,
+                )
+                plan = json.loads(result.stdout)
+                self.assertTrue(plan["dry_run"])
+                self.assertEqual(plan["paths"]["data_root"], str(expected_root.resolve()))
+                self.assertEqual(plan["machine_config"], str((self.machine if machine_args else config.DEFAULT_MACHINE).resolve()))
         self.assertFalse(output.parent.exists())
         self.assertFalse((self.root / "runs").exists())
         self.assertFalse((self.root / "data with spaces").exists())

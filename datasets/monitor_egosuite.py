@@ -23,7 +23,7 @@ from pathlib import Path
 import sys
 import time
 
-DEFAULT_OUTPUT_DIR = Path(os.environ.get("CVPR_DATA_ROOT") or Path.home() / "cvpr-data").expanduser() / "EgoSuite"
+DEFAULT_OUTPUT_DIR = Path(os.environ.get("CVPR_DATA_ROOT") or Path.home() / "sigma0" / "data").expanduser() / "EgoSuite"
 PHASES = {
     "starting": "启动", "listing": "读取远程文件目录", "planning": "查询时长并生成清单",
     "sampling": "抽样估算时长并生成清单",

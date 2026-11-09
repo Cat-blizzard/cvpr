@@ -15,18 +15,17 @@
 从仓库根目录，在仿真环境中执行：
 
 ```bash
-export CVPR_SIMPLE_RUNTIME="<RUNTIME_ROOT>"
 source scripts/4090_simple/local.env.example.sh
-export SIMPLE_DATA_DIR="<SIMPLE_DATA_ROOT>"
-export CVPR_SONIC_DIR="<SONIC_RESOURCES>"
+SESSION_OUTPUT="$CVPR_SIMPLE_RUNTIME/recordings/pico-$(date +%Y%m%d-%H%M%S)"
 
 python scripts/4090_simple/pico_simple_teleop.py \
   --data-root "$SIMPLE_DATA_DIR" --sonic-resources "$CVPR_SONIC_DIR" \
-  --pico-ip "<HEADSET_IP>" --render-mode mujoco_deferred \
-  --output "<SESSION_OUTPUT>"
+  --render-mode mujoco_deferred --output "$SESSION_OUTPUT"
 ```
 
-`SESSION_OUTPUT` 使用仓库外尚不存在的新目录。控制面板为 `http://127.0.0.1:43100/`，
+默认资源目录为 `~/sigma0/runtime/resources/simple_local_usd_v1` 和 `~/sigma0/runtime/resources/sonic_v1_1`，录制保存到 `~/sigma0/runtime/recordings/` 下的新会话目录。
+需要使用其他目录时，可在加载环境示例后调整 `SIMPLE_DATA_DIR`、`CVPR_SONIC_DIR` 和 `SESSION_OUTPUT`。
+控制面板为 `http://127.0.0.1:43100/`，
 通过 `--port` 修改端口。需要独立的大画面窗口时，另开终端运行：
 
 ```bash
@@ -60,10 +59,10 @@ B 未绑定仿真动作。每条示范按以下顺序操作：
 ## 图像后处理
 
 默认 `mujoco_deferred` 在操作时显示 MuJoCo 预览，训练用 RTX 图像在采集结束后生成。
-退出采集器后，在相同环境中执行：
+退出采集器后，在同一终端执行：
 
 ```bash
-python scripts/4090_simple/finish_pico_session.py "<SESSION_OUTPUT>"
+python scripts/4090_simple/finish_pico_session.py "$SESSION_OUTPUT"
 ```
 
 该命令等待后台筛选完成，为保留记录生成 RTX 图像，并检查录制内容。中断后可再次执行。

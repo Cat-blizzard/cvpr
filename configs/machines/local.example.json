@@ -1,5 +1,5 @@
 {
-  "data_root": "~/cvpr-data",
-  "model_root": "~/cvpr-models",
-  "run_root": "~/cvpr-runs"
+  "data_root": "~/sigma0/data",
+  "model_root": "~/sigma0/models",
+  "run_root": "~/sigma0/runs"
 }

@@ -1455,7 +1455,7 @@ def run(args):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    runtime=Path(os.environ.get("CVPR_SIMPLE_RUNTIME") or Path.home() / "CVPR_Evaluation_runtime").expanduser()
+    runtime=Path(os.environ.get("CVPR_SIMPLE_RUNTIME") or Path.home() / "sigma0" / "runtime").expanduser()
     asset_root = Path(os.environ.get("SIMPLE_DATA_DIR") or runtime / "resources/simple_local_usd_v1").expanduser()
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--data-root', type=Path, default=asset_root)

@@ -7,11 +7,10 @@
 在仓库根目录执行：
 
 ```bash
-export CVPR_SIMPLE_RUNTIME="<RUNTIME_ROOT>"
 source scripts/4090_simple/local.env.example.sh
 ```
 
-将模型、SONIC 控制器、场景资产和运行输出放在仓库外。`--data-root` 可显式指定场景资产目录；PICO 入口还支持 `SIMPLE_DATA_DIR`。
+默认根目录为 `~/sigma0/runtime`，模型、SONIC 控制器和场景资产放在其 `resources/` 下。需要更换根目录时，在加载环境示例前设置 `CVPR_SIMPLE_RUNTIME`；单独调整场景资产可使用 `--data-root`，PICO 入口也支持 `SIMPLE_DATA_DIR`。
 
 ## 模型服务
 

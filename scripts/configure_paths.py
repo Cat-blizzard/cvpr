@@ -11,6 +11,7 @@ import tempfile
 
 
 REPO = Path(__file__).resolve().parents[1]
+DEFAULT_MACHINE = REPO / "configs/machines/local.example.json"
 MOTION_RECIPE = REPO / "MotionExpert/configs/smplh_k12_psi0_pretrain.yaml"
 DINO_RECIPE = REPO / "pipeline/configs/dino.example.json"
 ROOT_KEYS = {"data_root", "model_root", "run_root"}
@@ -192,7 +193,8 @@ def write_files(output_dir, files, *, force=False):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--machine", type=Path, required=True, help="Local JSON machine paths (relative paths resolve against this file)")
+    parser.add_argument("--machine", type=Path, default=DEFAULT_MACHINE,
+                        help="Optional machine JSON; defaults to the bundled directory layout (relative paths resolve against this file)")
     parser.add_argument("--output-dir", type=Path, default=REPO / ".local/configs", help="Generated configs; relative paths resolve against the current directory")
     parser.add_argument("--dry-run", action="store_true", help="Print resolved paths without creating files or running any workload")
     parser.add_argument("--force", action="store_true", help="Explicitly replace previously generated config files")

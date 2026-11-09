@@ -17,7 +17,7 @@ import numpy as np
 
 CONTRACT = "cvpr-sonic11-pure-teleop-reference-v1"
 REPO = Path(__file__).resolve().parents[2]
-RESOURCES = Path(os.environ.get("CVPR_SIMPLE_RUNTIME") or Path.home() / "CVPR_Evaluation_runtime").expanduser() / "resources"
+RESOURCES = Path(os.environ.get("CVPR_SIMPLE_RUNTIME") or Path.home() / "sigma0" / "runtime").expanduser() / "resources"
 DEPLOY = REPO / 'VLMExpert/third_party/GR00T-WholeBodyControl/gear_sonic_deploy/src/g1/g1_deploy_onnx_ref'
 SOURCE_PATHS = {
     'gather_cpp': RESOURCES / 'carrybox_source_audit_20261021/official_controller/gear_sonic_deploy/src/g1/g1_deploy_onnx_ref/src/g1_deploy_onnx_ref.cpp',
