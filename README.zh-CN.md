@@ -15,7 +15,7 @@
 | 组件 | 配置文件 |
 | --- | --- |
 | MotionExpert | [预训练 YAML](MotionExpert/configs/smplh_k12_psi0_pretrain.yaml) |
-| DINO 特征提取 | [固定编码器配置](pipeline/configs/dino.json) |
+| DINO 特征提取 | [编码器配置](pipeline/configs/dino.json) |
 | 双来源联合训练 | [路径与初始化配置](configs/unifolm.env.sh) |
 
 数据、模型和输出默认放在 `~/sigma0/data`、`~/sigma0/models` 和 `~/sigma0/runs`。可直接修改配置以适配自己的存储位置。联合训练入口会自动加载 `configs/unifolm.env.sh`。
@@ -25,7 +25,7 @@
 | 模型 | 来源 | 用途 |
 | --- | --- | --- |
 | EgoDex390K VLM | [Ψ₀ 预训练骨干](https://huggingface.co/USC-PSI-Lab/psi-model/tree/main/psi0/pre.fast.2605160748.ckpt.ego390k) | 可用于双来源训练的 VLM 初始化 |
-| DINOv2 ViT-L/14 with registers | [固定编码器版本](https://huggingface.co/facebook/dinov2-with-registers-large/tree/e4c89a4e05589de9b3e188688a303d0f3c04d0f3) | MotionExpert 和 UnifoLM 使用的冻结视觉编码器 |
+| DINOv2 ViT-L/14 with registers | [DINOv2 模型](https://huggingface.co/facebook/dinov2-with-registers-large/tree/e4c89a4e05589de9b3e188688a303d0f3c04d0f3) | MotionExpert 和 UnifoLM 使用的冻结视觉编码器 |
 | MotionExpert | [运动预训练](#motionexpert)的输出 | `final.ckpt`；联合训练默认使用 EMA 权重初始化 |
 
 将上游 VLM 骨干和 DINO 编码器下载到默认模型目录：
@@ -37,12 +37,12 @@ python VLMExpert/scripts/data/download.py \
   --local-dir "$HOME/sigma0/models/egodex-vlm" \
   --repo-type model
 
-hf download facebook/dinov2-with-registers-large \
-  --revision e4c89a4e05589de9b3e188688a303d0f3c04d0f3 \
-  --local-dir "$HOME/sigma0/models/dinov2-with-registers-large"
+python scripts/download_dino.py
 ```
 
-VLM 下载器会将所选模型的配置、分词器和权重直接放在 `egodex-vlm/` 下。需要自行进行 VLM 预训练时，可参考 [EgoDex](https://github.com/apple/ml-egodex)、[Qwen3-VL-2B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct) 和[上游预训练说明](https://github.com/physical-superintelligence-lab/Psi0/tree/cda3fdfafe47cb6fa75400d013de1bd36e3cea05#pre-train-vlm)。其他 [Ψ₀ 权重](https://huggingface.co/USC-PSI-Lab/psi-model)属于上游模型；本仓库尚未提供 Σ₀ 论文结果权重的下载链接。
+VLM 下载器会将所选模型的配置、分词器和权重直接放在 `egodex-vlm/` 下。DINO 下载器从[编码器配置](pipeline/configs/dino.json)读取模型及版本，可通过 `--output` 更换模型目录。
+
+需要自行进行 VLM 预训练时，可参考 [EgoDex](https://github.com/apple/ml-egodex)、[Qwen3-VL-2B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct) 和[上游预训练说明](https://github.com/physical-superintelligence-lab/Psi0/tree/cda3fdfafe47cb6fa75400d013de1bd36e3cea05#pre-train-vlm)。其他 [Ψ₀ 权重](https://huggingface.co/USC-PSI-Lab/psi-model)属于上游模型；本仓库尚未提供 Σ₀ 论文结果权重的下载链接。
 
 ## 数据准备
 

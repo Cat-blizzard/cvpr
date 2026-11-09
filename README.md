@@ -15,7 +15,7 @@ Default paths and training settings are provided in these files:
 | Component | Configuration |
 | --- | --- |
 | MotionExpert | [Pretraining YAML](MotionExpert/configs/smplh_k12_psi0_pretrain.yaml) |
-| DINO feature extraction | [Pinned encoder configuration](pipeline/configs/dino.json) |
+| DINO feature extraction | [Encoder configuration](pipeline/configs/dino.json) |
 | Dual-source training | [Paths and initialization](configs/unifolm.env.sh) |
 
 Data, models and outputs default to `~/sigma0/data`, `~/sigma0/models` and `~/sigma0/runs`. Edit the configurations to use your own storage. The joint training launcher loads `configs/unifolm.env.sh` automatically.
@@ -25,7 +25,7 @@ Data, models and outputs default to `~/sigma0/data`, `~/sigma0/models` and `~/si
 | Model | Source | Use |
 | --- | --- | --- |
 | EgoDex390K VLM | [Ψ₀ pretrained backbone](https://huggingface.co/USC-PSI-Lab/psi-model/tree/main/psi0/pre.fast.2605160748.ckpt.ego390k) | Available VLM initialization for dual-source training |
-| DINOv2 ViT-L/14 with registers | [Fixed encoder revision](https://huggingface.co/facebook/dinov2-with-registers-large/tree/e4c89a4e05589de9b3e188688a303d0f3c04d0f3) | Frozen visual encoder for MotionExpert and UnifoLM |
+| DINOv2 ViT-L/14 with registers | [DINOv2 model](https://huggingface.co/facebook/dinov2-with-registers-large/tree/e4c89a4e05589de9b3e188688a303d0f3c04d0f3) | Frozen visual encoder for MotionExpert and UnifoLM |
 | MotionExpert | Output of [Motion pretraining](#motionexpert) | `final.ckpt`; joint training selects EMA weights by default |
 
 Download the upstream VLM backbone and the DINO encoder to the default model directories:
@@ -37,12 +37,12 @@ python VLMExpert/scripts/data/download.py \
   --local-dir "$HOME/sigma0/models/egodex-vlm" \
   --repo-type model
 
-hf download facebook/dinov2-with-registers-large \
-  --revision e4c89a4e05589de9b3e188688a303d0f3c04d0f3 \
-  --local-dir "$HOME/sigma0/models/dinov2-with-registers-large"
+python scripts/download_dino.py
 ```
 
-The VLM downloader places the selected model directly in `egodex-vlm/`, including its configuration, tokenizer and weights. For VLM pretraining from scratch, see [EgoDex](https://github.com/apple/ml-egodex), [Qwen3-VL-2B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct) and the [upstream pretraining instructions](https://github.com/physical-superintelligence-lab/Psi0/tree/cda3fdfafe47cb6fa75400d013de1bd36e3cea05#pre-train-vlm). Additional [Ψ₀ checkpoints](https://huggingface.co/USC-PSI-Lab/psi-model) are upstream models; Σ₀ result checkpoints are not linked in this repository.
+The VLM downloader places the selected model directly in `egodex-vlm/`, including its configuration, tokenizer and weights. The DINO downloader reads its model and version from the [encoder configuration](pipeline/configs/dino.json); use `--output` to choose another model directory.
+
+For VLM pretraining from scratch, see [EgoDex](https://github.com/apple/ml-egodex), [Qwen3-VL-2B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct) and the [upstream pretraining instructions](https://github.com/physical-superintelligence-lab/Psi0/tree/cda3fdfafe47cb6fa75400d013de1bd36e3cea05#pre-train-vlm). Additional [Ψ₀ checkpoints](https://huggingface.co/USC-PSI-Lab/psi-model) are upstream models; Σ₀ result checkpoints are not linked in this repository.
 
 ## Data Preparation
 

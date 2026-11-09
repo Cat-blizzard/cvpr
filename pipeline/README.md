@@ -34,13 +34,13 @@
 - 身体估计与来源观测的位置／旋转 mask、confidence、完成及残差信息。
 - 原生帧号、时间、视频帧号、PTS 误差和图像有效性。
 
-共同模型定义 SMPL-H 身体 22 关节轴，世界坐标单位为米、Z-up；默认模型 SHA256 为 `be42bff1ff0589cf0467893bcfbbeb3f9b533ba151031c8cdfb64ca1dcb34947`。MotionExpert 构建窗口时做 FK、选择 K12 并生成相机地面参考系和接触代理，详见[运动表示](../MotionExpert/README.md#运动表示)。
+共同模型定义 SMPL-H 身体 22 关节轴，世界坐标单位为米、Z-up；模型版本由[运动配置](../MotionExpert/configs/smplh_k12_psi0_pretrain.yaml)指定。MotionExpert 构建窗口时做 FK、选择 K12 并生成相机地面参考系和接触代理，详见[运动表示](../MotionExpert/README.md#运动表示)。
 
 来源记录必须能够定位对应原始 MCAP／MP4、时间同步与相机资源。提取器按来源记录读取图像，不以运动参数渲染图像代替原始相机数据。
 
 ## 图像与特征协议
 
-DINO 使用冻结的 `facebook/dinov2-with-registers-large`，权重 revision 在默认 JSON 中固定。共享 RGB 几何由 [ImageProcess](../ImageProcess/README.md)提供，DINO 禁用自身二次 resize／crop，仅执行编码器的 rescale 和归一化。
+DINO 使用冻结的 `facebook/dinov2-with-registers-large`，编码器版本由[默认配置](configs/dino.json)统一指定。共享 RGB 几何由 [ImageProcess](../ImageProcess/README.md)提供，DINO 禁用自身二次 resize／crop，仅执行编码器的 rescale 和归一化。
 
 | 阶段 | 最终 RGB 高×宽 | 策略 |
 | --- | --- | --- |
