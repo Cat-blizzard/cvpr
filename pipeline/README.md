@@ -1,16 +1,10 @@
 # MixEgoMotion：当前数据与 DINO 提取
 
-提取配置见[配置说明](../configs/README.md)和[`configs/dino.example.json`](configs/dino.example.json)。
+提取配置见[配置说明](../README.md#configuration)和[`configs/dino.example.json`](configs/dino.example.json)。
 
-当前 pipeline 只负责从已验收的 SMPL-H 运动归档和原始相机视频提取新 DINO 特征。
-当前训练目标为 `smplh-parameters-v4-camera-quality`，运动质量修订由MotionExpert负责，
-已提取的原生30Hz DINO及join复用相同字节，不需要为运动mask修订重新提取。
-原v1/v2/v3目录保留追溯，下方示例使用v4路径。相机原生质量修订继承v3的FK验收，
-新增camera point/transition mask，MotionExpert检查5Hz间全部原生边，避免跨跟踪中断生成有效增量。
+## 数据格式
 
-## 保留的数据
-
-根目录：`/gaozt-test1/datasets/MixEgoMotion`。
+数据根目录通过[路径配置](../README.md#configuration)指定。
 
 ```text
 MixEgoMotion/
@@ -20,22 +14,11 @@ MixEgoMotion/
 │   │   ├── motion.parquet     # 原生30Hz运动参数与显式标签
 │   │   └── receipt.json       # 原始不可变提交凭证
 │   ├── weights/smplh/         # 自有共同人体模型与手部表示资源
-│   ├── .pipeline/             # 提交记录、验收证据、旧视觉退休清单
 │   └── vision_profiles/psi0_256x480_v1_30hz/  # 原有DINO按相同字节复用
 ├── statistics/smplh_k12_5hz_joint_camera-quality-v4.pt         # 相机质量mask修订后的全量train统计
 ├── weights/dinov2-with-registers-large/     # 保留DINO预训练权重
-├── .pipeline/runtimes/                     # 现有提取／训练环境
 └── training/                               # 新训练产物
 ```
-
-| 来源 | Episodes | 原生30Hz帧数 |
-| --- | ---: | ---: |
-| EgoSuite | 6,614 | 26,841,893 |
-| EgoExo4D-HM | 2,649 | 11,295,991 |
-| 总计 | 9,263 | 38,137,884 |
-
-原分割为 train 7,409、val 915、test 939 episodes，见 `meta/splits.json`。
-47段HM隔离记录保留；训练按 `training_eligible` 与窗口mask过滤。
 
 `motion.parquet` 保留：
 
@@ -50,10 +33,6 @@ MixEgoMotion/
 共同模型定义SMPL-H身体22关节轴，世界坐标米、Z-up。MotionExpert构建窗口缓存时做FK并选既有K12，训练直接mmap读取，
 同时构建相机地面参考坐标和接触代理；不在归档增加dense22缓存。
 共同模型SHA256为 `be42bff1ff0589cf0467893bcfbbeb3f9b533ba151031c8cdfb64ca1dcb34947`。
-
-旧 `vision.parquet` 已退休删除；旧receipt和record保留原始来源身份。
-`.pipeline/retired-vision.json` 绑定归档metadata、records及逐文件旧身份，允许运动读取独立于已删除的旧特征。
-新的视觉缓存拥有独立manifest，训练不能回退到旧视觉版本。
 
 ## 图像与特征协议
 
@@ -98,24 +77,13 @@ vision_profiles/psi0_256x480_v1_30hz/
 ## 全量提取命令
 
 从仓库根目录执行。
-以下为另行重提取任务的命令示例，完整数据约781GB float32特征，另加join和凭证；同命令恢复只复用匹配来源和配置的产物。
-CLI固定原生30Hz，无需指定fps。当前选定BF16、每进程batch128、每卡2个DINO进程，8卡共16个进程。
-每个进程保留8个PIL预处理线程、4个解码线程和2批预取；输出仍为float32。
-八卡真实视频对照约1,370～1,419帧/秒，原TF32／batch32／每卡1进程约1,061帧/秒。
-此测量包含解码、预处理和写盘，排除模型初始化，使用重复读取的双来源片段。
-BF16的特征数值与TF32略有差异；128帧双来源对照中平均token余弦相似度均超过0.9999。
-完整配置、实验及选择记录：`/gaozt-test1/datasets/MixEgoMotion/.pipeline/jobs/dino-speed-20261013/summary.json`。
-
 ```bash
-cd /root/workspace/wbc/guanzerong/cvpr
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
-/gaozt-test1/datasets/MixEgoMotion/.pipeline/runtimes/dino-torch260-cu118/bin/python \
-  -m egomotion_pipeline.cli extract-smplh-features \
-  --dataset /gaozt-test1/datasets/MixEgoMotion/smplh-parameters-v4-camera-quality \
-  --output /gaozt-test1/datasets/MixEgoMotion/smplh-parameters-v4-camera-quality/vision_profiles/psi0_256x480_v1_30hz \
+python -m egomotion_pipeline.cli extract-smplh-features \
+  --dataset "<ARCHIVE_ROOT>" \
+  --output "<VISION_ROOT>" \
   --config .local/configs/dino.local.json \
-  --gpus 0 1 2 3 4 5 6 7 \
-  --workers-per-gpu 2
+  --gpus 0 \
+  --workers-per-gpu 1
 ```
 
 同命令再次执行可以恢复。加 `--dry-run` 只检查原始视频来源与提取计划，不加载DINO、不创建输出。

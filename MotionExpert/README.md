@@ -1,6 +1,6 @@
 # MotionExpert
 
-路径配置见[配置说明](../configs/README.md)，训练与推理入口见[使用说明](../docs/reproduction/README.md)。
+路径配置见[配置说明](../README.md#configuration)，训练与评估入口见[使用说明](../README.md#training)。以下命令从仓库根目录执行。
 
 在5Hz上读取历史5帧＋当前帧图像，联合重建历史运动并预测未来5帧。当前帧与Ψ₀当前帧同源、同时间。
 后训练在完整高斯噪声 `t=1` 上执行一次网络调用，得到完整11个motion hidden供下游输入，同时提供mean pooling摘要；
@@ -54,7 +54,7 @@ clean 256×320 DINO缓存；两路保持同源、同时间、同几何profile，
 
 ## 当前数据与相机质量修订
 
-当前目标位于 `/gaozt-test1/datasets/MixEgoMotion`：
+数据根目录由路径配置指定，所需文件包括：
 
 | 产物 | 相对路径 |
 | --- | --- |
@@ -63,11 +63,6 @@ clean 256×320 DINO缓存；两路保持同源、同时间、同几何profile，
 | DINO | `smplh-parameters-v4-camera-quality/vision_profiles/psi0_256x480_v1_30hz` |
 | 窗口mmap | `training_cache/smplh245_5hz_w11_camera-quality-v4` |
 | 全train统计 | `statistics/smplh_k12_5hz_joint_camera-quality-v4.pt` |
-| 修复、验收状态 | `.pipeline/current_motionexpert_repair.json` |
-
-共9,263 episodes／38,137,884原生帧，保留47段HM隔离记录及原train/val/test分割。
-v4继承v3的最终FK拟合质量验收，只新增相机质量和原生连续性检查，不重复已通过的FK数值验收。
-旧归档、统计、窗口缓存和checkpoint均保留追溯；DINO与图像join使用原字节硬链接，无需重提取。
 
 HM从原始Aria closed/open-loop读取逐时刻质量、时间、graph/session及速度证据。
 质量必须有限且大于0，**不把0.5统一判坏**；最近位姿误差不超过20ms。
@@ -93,7 +88,7 @@ EgoSuite原MCAP相机消息没有confidence字段，不伪造置信度；检查�
 相机审计、修订构建、独立验收分别由 `audit_camera_quality`、`revise_camera_archive`、
 `validate_camera_revision` 完成；候选写出不能自行授予独立验收。报告位于归档 `.pipeline/camera-quality/`。
 这些原始来源审计使用可选依赖：在仓库根目录执行 `python -m pip install -e './MotionExpert[audit]'`。
-普通训练无需安装该extra；当前指定runtime已包含所需的MCAP、protobuf和SciPy。
+普通训练无需安装该 extra。
 归档发布与训练就绪分开：缓存、新全train统计、当前架构GPU验收完成前 `formal_training_ready=false`。
 正式训练入口绑定统计SHA、窗口manifest、当前模型架构及GPU报告/实现身份，拒绝旧mask或过期验收。
 
@@ -112,17 +107,19 @@ EgoSuite原MCAP相机消息没有confidence字段，不伪造置信度；检查�
 普通构建可恢复已提交shard，最多8worker。原生质量mask变化后必须重新统计完整train，不能复用v3统计。
 
 ```bash
-MOTION_PY=/gaozt-test1/datasets/MixEgoMotion/.pipeline/runtimes/motionexpert-torch260-cu118/bin/python
-CONFIG=MotionExpert/configs/smplh_k12_psi0_pretrain.yaml
-CACHE=/gaozt-test1/datasets/MixEgoMotion/training_cache/smplh245_5hz_w11_camera-quality-v4
+MOTION_PY=python
+CONFIG=.local/configs/motion.local.json
+CACHE="<WINDOW_CACHE_ROOT>"
+RAW_CACHE_REPORT="<RAW_CACHE_REPORT>"
+NORMALIZED_CACHE_REPORT="<NORMALIZED_CACHE_REPORT>"
 
 "$MOTION_PY" -m MotionExpert.build_window_cache --config "$CONFIG" --output-root "$CACHE" --workers 8
 "$MOTION_PY" -m MotionExpert.validate_window_cache --config "$CONFIG" --source-config "$CONFIG" \
   --raw-only --report "$RAW_CACHE_REPORT"
 "$MOTION_PY" -m MotionExpert.compute_cached_motion_stats --config "$CONFIG" \
-  --archive-root /gaozt-test1/datasets/MixEgoMotion/smplh-parameters-v4-camera-quality \
+  --archive-root "<ARCHIVE_ROOT>" \
   --cache-root "$CACHE" --acceptance "$RAW_CACHE_REPORT" \
-  --output /gaozt-test1/datasets/MixEgoMotion/statistics/smplh_k12_5hz_joint_camera-quality-v4.pt
+  --output "<STATS_PATH>"
 "$MOTION_PY" -m MotionExpert.validate_window_cache --config "$CONFIG" --source-config "$CONFIG" \
   --gpu-check --device cuda:0 --report "$NORMALIZED_CACHE_REPORT"
 ```
@@ -131,7 +128,7 @@ CACHE=/gaozt-test1/datasets/MixEgoMotion/training_cache/smplh245_5hz_w11_camera-
 统计输出拒绝覆盖已有文件；raw报告不能代替训练所需的归一化/GPU验收。
 新统计内嵌 `window_cache_provenance`，绑定产生它的缓存manifest与原始接受报告字节身份；
 v4训练入口及归一化缓存Dataset核对这条绑定，同一v4归档下重新生成的缓存也不能搭配旧统计。
-旧缓存自动切换工具只适合同一架构、相同统计的完整续训，本次架构和mask修订不使用该工具。
+旧缓存自动切换工具只适合同一架构、相同统计的完整续训。
 
 ## 模型、归一化与异常保护
 
@@ -140,7 +137,6 @@ v4训练入口及归一化缓存Dataset核对这条绑定，同一v4归档下重
 self-attention Q/K/V共用归一化后的motion；cross-attention的Q使用自身LayerNorm，
 K/V对图像和时间context单独做不带仿射参数的LayerNorm。
 旧GLOBAL／旧注意力checkpoint不能直接resume、init或warm-start到本架构。
-旧第60轮专用配置已移除，旧权重及实验日志保留；当前配置面向**从头新任务**。
 
 保护在反向传播前检查非有限预测、实际加权loss、逐样本加权flow loss和每层每token RMS最大值，
 优化器更新前检查**unscale后、clip前**的梯度。DDP先汇总再一致停止，避免一张卡退出、其他卡继续反传。
@@ -158,8 +154,6 @@ K/V对图像和时间context单独做不带仿射参数的LayerNorm。
 loss绝对上限从第一步生效，只约束 `loss`、`flow_loss`、`per_sample_flow_loss`；
 所有未加权分组MSE与辅助诊断仍检查NaN/Inf并记录最大值，不共用实际优化目标的幅值门限。
 32个健康训练批次后，batch loss还须不超过 `max(1, 50×健康历史中位数)`。
-有效快速转向的6D余弦通道在归一化后可以产生较大分组MSE；本次全train零预测baseline的
-加权flow最大67.12、全局旋转分组最大217.73，原MPS运动与质量证据支持这些目标，保留标签和统计。
 这些是可配置保护上限，不代表最佳训练超参。关闭幅值保护仍拒绝NaN/Inf。
 FP16＋fused AdamW因不能保证pre-step时已unscale而拒绝；当前BF16＋普通AdamW可用。
 异常时在 `TRAIN.EXP_PATH/anomalies/` 保存各卡batch、mask、来源、RNG、实际x_t/t、条件及参数身份，
@@ -185,29 +179,26 @@ FP16＋fused AdamW因不能保证pre-step时已unscale而拒绝；当前BF16＋�
 从头训练：
 
 ```bash
-cd /root/workspace/wbc/guanzerong/cvpr
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
 NCCL_IB_DISABLE=1 NCCL_P2P_DISABLE=0 NCCL_SHM_DISABLE=0 NCCL_SOCKET_IFNAME=lo \
-/gaozt-test1/datasets/MixEgoMotion/.pipeline/runtimes/motionexpert-torch260-cu118/bin/python \
-  -m MotionExpert.train --config MotionExpert/configs/smplh_k12_psi0_pretrain.yaml --from-scratch
+python \
+  -m MotionExpert.train --config .local/configs/motion.local.json --from-scratch
 ```
 
-输出位于 `training/smplh_k12_psi0_256x480_5hz_camera_quality_v4_meanpool_from_scratch`，在MixEgoMotion根目录。
+输出目录由配置中的 `TRAIN.EXP_PATH` 指定。
 Lightning启动DDP，无需另套torchrun。后续同架构续训须使用同一统计与视觉身份。
 从已有checkpoint续训：
 
 ```bash
-cd /root/workspace/wbc/guanzerong/cvpr
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
 NCCL_IB_DISABLE=1 NCCL_P2P_DISABLE=0 NCCL_SHM_DISABLE=0 NCCL_SOCKET_IFNAME=lo \
-/gaozt-test1/datasets/MixEgoMotion/.pipeline/runtimes/motionexpert-torch260-cu118/bin/python \
-  -m MotionExpert.train --config MotionExpert/configs/smplh_k12_psi0_pretrain.yaml \
-  --resume /gaozt-test1/datasets/MixEgoMotion/training/smplh_k12_psi0_256x480_5hz_camera_quality_v4_meanpool_from_scratch/epoch=99-step=48700.ckpt \
+python \
+  -m MotionExpert.train --config .local/configs/motion.local.json \
+  --resume "<CHECKPOINT_100>" \
   --max-epochs 200
 ```
 
-完整恢复优化器、EMA、调度和step计数，从第101轮继续；不重新warmup，不额外训练200轮。
-恢复点学习率约5.84e-5，沿用原200轮日程至1e-5；每20轮保存和每5轮验证保持不变。
+恢复优化器、EMA、调度和 step 计数，并继续原任务的学习率日程。
 
 上述通信设置适用于当前单机八卡；显式覆盖继承的P2P／SHM禁用环境，正式命令不再使用
 `--ddp-socket`。该选项仍保留为通信兼容性回退，会关闭P2P和共享内存。
@@ -227,8 +218,7 @@ NCCL_IB_DISABLE=1 NCCL_P2P_DISABLE=0 NCCL_SHM_DISABLE=0 NCCL_SOCKET_IFNAME=lo \
 运行命令：
 
 ```bash
-/root/.cache/cvpr-loss-plot/bin/python -u \
-  /root/workspace/wbc/guanzerong/cvpr/MotionExpert/watch_loss.py \
+python -u MotionExpert/watch_loss.py --run-dir "<RUN_DIR>" \
   --every-epochs 1 --poll-seconds 30
 ```
 
@@ -281,12 +271,11 @@ MotionExpert全程EMA／FP32／eval／禁止梯度，只训练独立的线性rid
 直接读取已验收train／val packed mmap及按需DINO，不扫描原始归档、解码Parquet或执行FK。
 
 ```bash
-cd /root/workspace/wbc/guanzerong/cvpr
-/gaozt-test1/datasets/MixEgoMotion/.pipeline/runtimes/motionexpert-torch260-cu118/bin/python -u \
+python -u \
   -m MotionExpert.probe_prior \
-  --checkpoint20 /gaozt-test1/datasets/MixEgoMotion/training/smplh_k12_psi0_256x480_5hz_camera_quality_v4_meanpool_from_scratch/epoch=19-step=9740.ckpt \
-  --checkpoint100 /gaozt-test1/datasets/MixEgoMotion/training/smplh_k12_psi0_256x480_5hz_camera_quality_v4_meanpool_from_scratch/epoch=99-step=48700.ckpt \
-  --output /gaozt-test1/datasets/MixEgoMotion/.pipeline/jobs/prior-probe-new-run \
+  --checkpoint20 "<CHECKPOINT_20>" \
+  --checkpoint100 "<CHECKPOINT_100>" \
+  --output "<PROBE_OUTPUT>" \
   --gpus 0,1,2,3,4,5,6,7
 ```
 
@@ -308,24 +297,14 @@ DINO保留6×5×1024时序后仅在train拟合PCA768，记录解释方差；三�
 `--stage extract` 仅提取；`--stage fit` 在已提取的同一输出目录拟合读出。
 该验证衡量冻结pooled特征的运动信息可读性，不直接等同于下游注入收益；DINO压缩也可能丢失信息。
 
-线性读出对照：8张A100、每卡B128、两份EMA、FP32；train 30,704窗／val 7,604窗。
-各来源train 1024个episode、val 256个episode，验证连通组EgoSuite 114／HM 59。
-20／100轮各卡B4与公开特征接口严格一致，MotionExpert无可训练参数或梯度。
-EgoSuite的100−20轮腕位移误差为−0.311cm（组95%区间−0.545至−0.068），参考XY为−0.428cm
-（−0.652至−0.212）；HM主要差值区间跨0。没有证据说明100轮的冻结线性读出泛化退化。
-但EgoSuite的零位移参照仍优于两组腕／参考位移读出；接触变化读出F1为0，不能把高接触F1当作变化预测能力。
-DINO PCA768保留87.57%特征方差，不代表保留同等比例运动信息。结果不能替代下游对照或证明续训到200轮有收益。
-完整报告与GPU记录：`/gaozt-test1/datasets/MixEgoMotion/.pipeline/jobs/motionexpert-frozen-prior20-100-20261017T153935Z/`。
-
-新增第160轮对照时，复用上述已验收job，保持原窗口顺序、标签、DINO和逐窗噪声：
+增加第160轮对照时，复用已有 probe 输出目录，保持原窗口顺序、标签、DINO和逐窗噪声：
 
 ```bash
-cd /root/workspace/wbc/guanzerong/cvpr
-/gaozt-test1/datasets/MixEgoMotion/.pipeline/runtimes/motionexpert-torch260-cu118/bin/python -u \
+python -u \
   -m MotionExpert.probe_prior \
-  --reuse-job /gaozt-test1/datasets/MixEgoMotion/.pipeline/jobs/motionexpert-frozen-prior20-100-20261017T153935Z \
-  --checkpoint160 /gaozt-test1/datasets/MixEgoMotion/training/smplh_k12_psi0_256x480_5hz_camera_quality_v4_meanpool_from_scratch/epoch=159-step=77920.ckpt \
-  --output /gaozt-test1/datasets/MixEgoMotion/.pipeline/jobs/prior-probe-add160-new-run \
+  --reuse-job "<PREVIOUS_PROBE_OUTPUT>" \
+  --checkpoint160 "<CHECKPOINT_160>" \
+  --output "<EXTENDED_PROBE_OUTPUT>" \
   --gpus 0,1,2,3,4,5,6,7 --batch-size 128
 ```
 
@@ -333,16 +312,10 @@ cd /root/workspace/wbc/guanzerong/cvpr
 原产物只读保留，并核对新旧逐卡窗口、噪声、历史图像摘要。报告增加160−20、160−100的分来源配对组区间。
 此项是train／val冻结先验验证；完整test动作指标另按原test协议评估，二者的预测目标与样本不能混同。
 
-增量对照：仍为相同38,308窗，8卡各B128、EMA／FP32；20／100旧读出回放误差为0。
-160−100轮的EgoSuite腕／参考XY误差分别增加0.192／0.265cm，HM增加0.336／0.372cm；
-四项配对组95%区间均在0以上。HM接触切换F1从0.2361提高至0.2623，其余分量存在取舍。
-在这项冻结位移读出中，100轮为三者中较好的候选；结果不直接等同于完整test动作或下游收益。
-报告与新增GPU记录：`/gaozt-test1/datasets/MixEgoMotion/.pipeline/jobs/motionexpert-frozen-prior20-100-160-20261018T050747947054Z/`。
-
 ## 完整token等参数读出对照
 
-`probe_tokens` 只补提第100轮的完整 `one_step_hidden [B,11,768]`，复用已验收20／100轮job的
-30,704个train窗、7,604个val窗、标签、DINO和逐窗噪声，不重新扫描归档或拟合原来的ridge。
+`probe_tokens` 提取第100轮的完整 `one_step_hidden [B,11,768]`，复用 `probe_prior` 输出的
+样本选择、标签、DINO和逐窗噪声，不重新扫描归档或拟合原来的ridge。
 同一次专家前向的hidden分别取历史／当前6个、未来5个和全部11个，另设历史6帧的DINO 30-token基线。
 未来hidden仍经过历史图像条件和全窗口attention；此对照只检验token读取价值，不能证明历史重建监督的因果收益。
 四组都预测未来5帧的双腕位移、相机地面参考系XY位移与转向、双脚接触和相对当前帧的接触状态变化，
@@ -350,16 +323,15 @@ cd /root/workspace/wbc/guanzerong/cvpr
 不表示两个时刻之间曾发生过任意切换。本实验不测量完整245维动作的重建误差。
 
 ```bash
-cd /root/workspace/wbc/guanzerong/cvpr
-/gaozt-test1/datasets/MixEgoMotion/.pipeline/runtimes/motionexpert-torch260-cu118/bin/python -u \
+python -u \
   -m MotionExpert.probe_tokens \
-  --reuse-job /gaozt-test1/datasets/MixEgoMotion/.pipeline/jobs/motionexpert-frozen-prior20-100-20261017T153935Z \
-  --job-dir /gaozt-test1/datasets/MixEgoMotion/.pipeline/jobs/token-probe-new-run \
+  --reuse-job "<PREVIOUS_PROBE_OUTPUT>" \
+  --job-dir "<TOKEN_PROBE_OUTPUT>" \
   --gpus 0,1,2,3,4,5,6,7 --batch-size 128 --sleep-seconds 12 --memory-fraction .06
 
-/gaozt-test1/datasets/MixEgoMotion/.pipeline/runtimes/motionexpert-torch260-cu118/bin/python -u \
+python -u \
   -m MotionExpert.token_probe_fit \
-  --job /gaozt-test1/datasets/MixEgoMotion/.pipeline/jobs/token-probe-new-run \
+  --job "<TOKEN_PROBE_OUTPUT>" \
   --device cuda:0 --batch-size 256 --max-epochs 40 --patience 6 \
   --seeds 17 29 43 --sleep-seconds .02
 ```
@@ -377,35 +349,9 @@ cd /root/workspace/wbc/guanzerong/cvpr
 报告三个独立读出seed的指标均值、标准差、逐seed配对连通组区间，以及RMSE、接触切换和有效覆盖。
 三个seed不是三次MotionExpert训练，也不将预测集成为一个结果。
 三个seed复用同一逐窗噪声，不估计更换噪声或重新训练专家带来的不确定性。
-本次使用新的attention读出，分数不能与旧mean＋ridge或DINO PCA＋ridge直接归因比较。
+attention 读出与 mean＋ridge、DINO PCA＋ridge 使用不同的特征处理和读出方式。
 
 产物保存在独立job：`tokens.npy`、`image-valid.npy`、`extraction-complete.json`、
 `token-*-head.pt`、`token-metrics.json`、`token-report.md`及各阶段GPU检查。
 优先使用空闲GPU；共享训练GPU时会争用算力，应明确记录并限速，不能保证零吞吐影响。
 `control.json` 和 `fit-control.json` 的 `paused`／`sleep_seconds` 仅控制诊断，不操作训练。
-
-第100轮EMA的四组对照结果如下。以下为7,604个val窗上三个独立读出seed的均值±标准差，
-按未来0.2至1.0秒的五个时距汇总有效观测；每组均为290,886参数。
-
-| 来源 | 输入 | 双腕位移cm↓ | 参考XY位移cm↓ | 转向°↓ |
-|---|---|---:|---:|---:|
-| EgoSuite | 历史6（含当前） | 12.171 ± 0.180 | 7.617 ± 0.199 | 6.151 ± 0.189 |
-| EgoSuite | 未来5 | 11.913 ± 0.015 | 7.143 ± 0.058 | 5.947 ± 0.082 |
-| EgoSuite | 全部11 | 11.632 ± 0.148 | 7.111 ± 0.126 | 5.829 ± 0.055 |
-| EgoSuite | DINO历史6帧 | 13.194 ± 0.270 | 8.921 ± 0.343 | 6.878 ± 0.253 |
-| EgoExo4D-HM | 历史6（含当前） | 29.009 ± 0.172 | 18.080 ± 0.177 | 14.662 ± 0.135 |
-| EgoExo4D-HM | 未来5 | 28.851 ± 0.200 | 18.039 ± 0.210 | 14.744 ± 0.012 |
-| EgoExo4D-HM | 全部11 | 28.712 ± 0.272 | 18.006 ± 0.168 | 14.891 ± 0.044 |
-| EgoExo4D-HM | DINO历史6帧 | 30.864 ± 0.211 | 20.628 ± 0.289 | 15.502 ± 0.234 |
-
-全部11个相对DINO的双腕误差降低约11.8%／7.0%，参考XY误差降低约20.3%／12.7%；
-两来源三个seed的上述配对组bootstrap 95%区间均低于0，未做多重比较校正。
-全部11与未来5的腕误差差值仅约0.281cm／0.139cm，部分区间跨0，HM一个seed排序反转；
-不能据此断言11个在各项任务上都更好，也不能证明历史重建损失的因果收益。
-脚接触仍需看balanced accuracy和状态变化：EgoSuite全部11的这两项仅0.5420／F1 0.0414，
-其接触正类约92.94%，较高的普通接触F1不能单独作为有效运动证据。
-
-全部内部拟合按patience停止，无40轮预算触顶。
-分析、完整指标、配对区间与独立review保存在：
-`/gaozt-test1/datasets/MixEgoMotion/.pipeline/jobs/motionexpert-token-ablation100-20261018T054910Z-paired128/`。
-其中 `analysis.md` 解释结果及边界，`token-metrics.json` 保存逐seed指标与训练曲线。

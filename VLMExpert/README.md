@@ -1,6 +1,6 @@
 # VLMExpert
 
-使用方法见[使用说明](../docs/reproduction/README.md)，联合训练的路径示例见[`unifolm.env.example.sh`](../configs/machines/unifolm.env.example.sh)。
+使用方法见[使用说明](../README.md#training)，联合训练的路径示例见[`unifolm.env.example.sh`](../configs/machines/unifolm.env.example.sh)。
 
 ## 本仓库扩展：双来源 Action Expert
 
@@ -101,17 +101,16 @@ Qwen 目录只需本机 config／processor，Motion checkpoint 提供构造与�
 
 ### UnifoLM 下载、DINO 提取与读取
 
-数据根目录为 `/gaozt-test1/datasets/UnifoLM`，与 EgoSuite、EgoExo-4D-HM 等并列。
+使用 `--root` 指定 UnifoLM 数据目录。
 使用 [官方 SONIC 数据包](https://huggingface.co/datasets/USC-PSI-Lab/psi-data/tree/e78fb93cc28912a3031a10b8656d32d7f0a2b867/sonic)，
-固定 revision `e78fb93cc28912a3031a10b8656d32d7f0a2b867`。训练 ZIP 为38,855,909,476字节，
-下载准备脚本按8MiB持久分块保存，校验每次 HTTP 206 的范围与完整长度，失败只重试当前块；
+固定 revision `e78fb93cc28912a3031a10b8656d32d7f0a2b867`。下载准备脚本按8MiB持久分块保存，校验每次 HTTP 206 的范围与完整长度，失败只重试当前块；
 重跑复用已完成且本地 SHA 匹配的块。最终以官方整包 SHA256、解压 CRC 和 train/val 共享统计验收，
 安全拒绝越界 ZIP 或符号链接残留。本地分块 SHA 用于恢复校验，不是官方分块校验值。
 脚本只准备数据，不启动训练；已存在的数据需通过原成员 CRC 才能复用。
 
 ```bash
 # 从仓库根目录运行；下载仅使用 Python 标准库，数据与缓存始终在仓库外。
-python VLMExpert/scripts/data/prepare_unifolm.py --root /gaozt-test1/datasets/UnifoLM
+python VLMExpert/scripts/data/prepare_unifolm.py --root "<UNIFOLM_ROOT>"
 # 默认64个并发请求，可用 --download-workers 调整；完成块保存在 .pipeline/downloads。
 # 已完整下载时可用 --skip-download，只校验与解压。
 ```
@@ -119,7 +118,7 @@ python VLMExpert/scripts/data/prepare_unifolm.py --root /gaozt-test1/datasets/Un
 两套 pack 保留官方 action/state/SONIC1.1 tokens、split 与元数据。目录布局：
 
 ```text
-/gaozt-test1/datasets/UnifoLM/
+<UNIFOLM_ROOT>/
   archives/official/sonic/           # 固定版本 ZIP
   unifolm_sonic_lerobot_train/      # 原始 LeRobot pack
   unifolm_sonic_lerobot_val/
@@ -128,7 +127,7 @@ python VLMExpert/scripts/data/prepare_unifolm.py --root /gaozt-test1/datasets/Un
       manifest.json
       episodes/00000000/{features.npy,frames.npz,receipt.json}
     unifolm_sonic_lerobot_val/
-  .pipeline/                       # 下载／提取日志、收据及本机验证记录
+  .pipeline/                       # 数据准备与提取元数据
 ```
 
 **DINO 缓存与 Ψ₀ 读取端共用 `data.shared_image_profile`，当前为 `256x320`。**
@@ -138,16 +137,15 @@ python VLMExpert/scripts/data/prepare_unifolm.py --root /gaozt-test1/datasets/Un
 `vlm_color_clean_motion` 接收原始分辨率 uint8 RGB，在模型 transform 内按该 profile 完成几何和颜色，避免重复 resize。
 完整 profile/hash/实现、NumPy/Pillow 版本、DINO 本地权重/config SHA 和原始视频／Parquet 身份随缓存保存。
 提取与读取需匹配 Ψ₀ `uv.lock` 的 NumPy1.26.4／Pillow11.3.0；不一致会明确拒绝。
-视频解码使用同一 `uv.lock` 的 PyAV16.0.1。本机验证集早先由 PyAV17.1.0 提取，
-已与16.0.1逐帧比对全部4688帧的 RGB、PTS 和时间戳，完全一致，可继续使用。
+视频解码使用 `uv.lock` 中指定的 PyAV 版本。
 这次后训练使用与 Motion 预训练 H256×W480 相同的 DINO 权重，并显式适配到 H256×W320；
 原 Motion 预训练的图像配置和缓存不修改。
 
 ```bash
 python VLMExpert/scripts/data/extract_unifolm_dino.py \
-  --dataset-root /gaozt-test1/datasets/UnifoLM/unifolm_sonic_lerobot_val \
-  --output /gaozt-test1/datasets/UnifoLM/dino/256x320/unifolm_sonic_lerobot_val \
-  --model-path /gaozt-test1/datasets/MixEgoMotion/weights/dinov2-with-registers-large/e4c89a4e05589de9b3e188688a303d0f3c04d0f3 \
+  --dataset-root "<UNIFOLM_ROOT>/unifolm_sonic_lerobot_val" \
+  --output "<DINO_CACHE_ROOT>/unifolm_sonic_lerobot_val" \
+  --model-path "<DINO_MODEL_DIR>" \
   --shared-image-profile 256x320 --device cuda:0 \
   --batch-size 32 --workers 4 --inference-precision bf16 --storage-dtype float16
 # 提取训练集时把 dataset-root/output 的 pack ID 换为 unifolm_sonic_lerobot_train。
@@ -160,17 +158,11 @@ python VLMExpert/scripts/data/extract_unifolm_dino.py \
 写入完成后才提交 receipt；只有所有 episode 齐全才把 manifest 标为 complete。
 原参数重跑会复用已提交 episode，未完成 episode 重新提取；来源或配置改变时拒绝复用。
 
-本机训练缓存已由8张 A100、8个 shard（每卡 batch64）完成：7244个 episode、
-5,416,386帧，完整有效历史对应5,199,066个训练样本。全量特征有限性、SHA256、
-原生帧／时间戳绑定和历史窗口检查已通过，详见
-[`unifolm_train_dino_final_validation.json`](/gaozt-test1/datasets/UnifoLM/.pipeline/unifolm_train_dino_final_validation.json)。
-已验收的缓存继续复用；后续启动前检查 manifest 和身份，不重新提取。
-
 训练读取设置：
 
 ```python
 # LerobotDataConfig 字段；动作、state 与原来的 delta_timestamps 查询保持一致。
-dino_cache_root = "/gaozt-test1/datasets/UnifoLM/dino/256x320"
+dino_cache_root = "<DINO_CACHE_ROOT>"
 shared_image_profile = "256x320"
 dino_max_open_episodes = 8
 
@@ -196,7 +188,7 @@ VLM 当前帧保持原动作查询的30Hz时刻。缺少真实一秒历史、跨
 
 使用 [posttrain-dual-source-unifolm.sh](scripts/train/psi0/posttrain-dual-source-unifolm.sh)，
 必须显式提供 EgoDex VLM、Motion checkpoint、UnifoLM 数据路径／ID，以及
-`UNIFOLM_DINO_CACHE=/gaozt-test1/datasets/UnifoLM/dino/256x320`；
+`UNIFOLM_DINO_CACHE=<DINO_CACHE_ROOT>`；
 脚本的 `--dry-run` 只打印命令，`--check-only` 先检查输入再打印命令，两者均不启动训练；
 `MOTION_USE_EMA=1/0` 指定初始化权重选择。
 数据 wrapper 自动把已完成的原生 DINO 缓存接入 `motion_img_embs`，并将同源、同时间的当前 RGB 交给所选策略处理；
@@ -224,42 +216,6 @@ Motion 仅冻结当前 hidden 接口不使用的运动输出头、被完整遮�
 该模式 DDP 使用 `find_unused_parameters=True, static_graph=False`。
 新 head 从头初始化，不能沿用冻结阶段或原 joint head 的 optimizer 状态。
 
-#### 学习率与有效 batch 的选择
-
-新 action head 与 VLM 的分组学习率保持 Ψ₀ 一致。
-建议 MotionExpert 的峰值 LR 保持 `1e-5`，batch 保持 **8卡 × 每卡16 × 累积2步 = 常规有效全局 batch256**。
-这是一组有论文依据、且通过八卡运行检查的初值，尚未做收敛最优性比较。
-正式脚本需显式设置 `NPROC_PER_NODE=8`；只设置 `CUDA_VISIBLE_DEVICES` 不会改变该脚本默认的单进程数。
-
-| 相关工作及机器人后训练阶段 | 有效全局 batch | 公开学习率 | 运动先验的实际训练方式 |
-| --- | --- | --- | --- |
-| [WholeBodyWAM：Scalable Motion Priors，Table A3](https://arxiv.org/html/2609.18197v2#A0.SS3.SSS5) | 8×4＝32 | Stage II统一报告 `1e-5`，未单列Motion组倍率；约5%warmup、20k步cosine | Motion Expert从Stage I初始化并全程可训；联合video、motion、action三项损失，是最直接参考 |
-| [λ₀ 原论文](https://arxiv.org/html/2610.00438v1)及[当前官方posttrain recipe](https://github.com/LambdaHumanoid/openlambda/blob/a1257e4aca0c64febdec4b89704a1aba8187f156/lambda0/lambda0/recipes/posttrain.json) | 8×4×1＝32条观测 | 高层生成模型 `5e-5`；50k步 | SONIC运动编码器冻结、不在高层优化器中；该LR不是可训练MotionExpert的微调LR |
-| [WB-WAM后训练配置](https://github.com/WB-WaM/WB-WAM-Official/blob/6a9bf12d6c36d42ec66ee2aa7235ea2058175c40/training/configs/wb_task/_base/posttrain.yaml)及[八进程示例](https://github.com/WB-WaM/WB-WAM-Official/blob/6a9bf12d6c36d42ec66ee2aa7235ea2058175c40/training/README.md) | 示例推算8×16×1＝128 | Video／Action／proprio统一 `1e-4`；50epochs | 运动监督融入Video／Action模型，没有单列Motion Expert；其统一LR不是Motion专属LR |
-
-这里的WholeBodyWAM指Bowei Zhang等的 `2609.18197v2`，与另一篇WBC-grounded同名工作
-`2609.16644`及WB-WAM `2609.34199`均不同。WholeBodyWAM作者代码仍Coming Soon，表中数值来自论文，
-不能声称已核验其optimizer分组实现。λ₀数值来自当前发布recipe，其Stage I/II协议与原论文有修订；
-每观测4份flow噪声不等于4条独立观测。WB-WAM的global128根据公开八进程命令和本地batch语义计算，
-并非论文明确报告的实验global batch。
-
-因此，Motion `1e-5` 有最接近的WholeBodyWAM后训练数量级支持；它相当于我们新头峰值LR的十分之一，
-作为已预训练运动主干的适配起点较合理。当前本工程仅由action flow loss反传，
-WholeBodyWAM另保留motion prediction loss，不能据其结果保证我们的运动表示不会遗忘。
-若后续观察到验证误差或运动表示退化，可在固定batch256、数据顺序和样本预算下，
-将Motion `5e-6`作为更保守对照。
-其他方法的global32／128对应不同模型、输入与示范预算，不能据此把Motion LR按32→256直接乘8。
-batch256继续匹配同数据的Ψ₀配方，保留1000步warmup和cosine，VLM与新头LR保持上表设定。
-
-正式日程保持1000次优化器更新 warmup、40,000次更新 cosine。当前5199066个有效历史窗口下，
-batch256对应约20,309次更新／遍，40k约为1.97遍窗口抽样；相邻30Hz窗口和动作chunk重叠，
-该数字不表示独立场景数量。Ψ₀同为40k更新；按本机对应的完整train pack原生5,416,386行算约1.89遍，
-本工程历史筛选后约1.97遍，两者均接近2遍。Accelerate在epoch尾可能刷新不足2个microbatch的累积，末次有效batch会较小。
-`PosttrainTrainer` 给 scheduler 的步数乘world size，与 Accelerate1.7每次同步更新内部推进world size次相抵；
-实际 warmup仍是1000次优化器更新。
-正式入口同时修复了history wrapper被误判为sharded数据、无法统计样本数的问题，
-以及epoch日志重复乘world size的问题。
-
 #### UnifoLM 提速与断点恢复
 
 提速入口 `scripts/train/psi0/posttrain-dual-source-unifolm-speedup.sh` 默认只做检查，
@@ -281,8 +237,7 @@ wrapper 不自行改变 `CUDA_LAUNCH_BLOCKING`，启动器须显式设置。
 日志 loss 仍为最后一个累积 microbatch 的跨卡均值，不是完整累积窗口均值。
 
 ```bash
-cd /root/workspace/wbc/guanzerong/cvpr
-source VLMExpert/scripts/train/psi0/unifolm-local.env.sh
+source .local/unifolm.env.sh
 CUDA_LAUNCH_BLOCKING=0 UNIFOLM_OPTIMIZER_FOREACH=False \
   bash VLMExpert/scripts/train/psi0/posttrain-dual-source-unifolm-speedup.sh --check-only
 ```
@@ -314,13 +269,12 @@ W&B `_step=0` 对应第1次更新；分组为1–100、101–200，按同一步�
 在当前仓库启动（默认 detached；已运行时复用，不增加第二个监控）：
 
 ```bash
-cd /root/workspace/wbc/guanzerong/cvpr
 python3 VLMExpert/scripts/analysis/monitor_training_loss.py \
-  --state /gaozt-test1/datasets/UnifoLM/.pipeline/current_unifolm_training.json \
-  --output-dir /gaozt-test1/datasets/UnifoLM/.pipeline/analysis/loss-100step-261020043942 \
-  --extract-python /gaozt-test1/datasets/UnifoLM/.pipeline/runtimes/psi0-py311-torch270-cu126/bin/python \
-  --plot-python "$(command -v python3)" \
-  --plot-library-dir /root/.cache/cvpr-loss-plot-libs
+  --state "<TRAINING_STATE_JSON>" \
+  --output-dir "<PLOT_OUTPUT>" \
+  --extract-python "<MODEL_PYTHON>" \
+  --plot-python "<PLOT_PYTHON>" \
+  --plot-library-dir "<PLOT_LIBRARY_DIR>"
 ```
 
 `--mode status` 配合相同 `--state`／`--output-dir` 查看监控存活、最新渲染步数和下一刷新点。
@@ -359,16 +313,6 @@ p_v = features.p_v            # 默认 [B, D]
 提取使用当前实例加载的 VLM 权重；使用 EgoDex 微调结果时需先加载对应权重。
 输入必须是观察 prefix，不能包含 teacher forcing 的真实 FAST 动作答案。
 池化接口不增加 GLOBAL token 或可学习参数；双来源 action head 是单独的新参数结构。
-
-轻量回归验证（PyTorch、pytest；接线检查用实际方法和模型替身，无需下载权重）：
-
-```bash
-cd VLMExpert
-CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:. \
-  python -m pytest -p no:cacheprovider -q tests/test_vlm_features.py
-```
-
-初始池化接口的 CPU／单卡 BF16 验证见 [池化验证记录](../docs/vlm_pooling_validation.json)。
 
 以下保留官方上游说明；源码快照来源见 [版本记录](../docs/psi0_upstream.json)。
 
@@ -410,16 +354,6 @@ At the top, the $\Psi_0$ model consists of two end-to-end trained components: a 
 </details>
 
 <p></p>
-
-## 📢 News & Updates
-
-- [x] [2026-09-13] Released new Psi-0 [checkpoints](#checkpoints) specifically trained for [SONIC](https://github.com/NVlabs/GR00T-WholeBodyControl) and its training recipes: [post-train](scripts/train/psi0/posttrain-psix-unifolm-g1-sonic1.0.sh) and [fine-tune](scripts/train/psi0/finetune-sonic-psi-dream-baseline.sh). Checkout out this [release node](examples/psi0_for_sonic.md).
-- [x] [2026-08-30] Released [SIMPLE SONIC wholebody training recipe](scripts/train/psi0/finetune-sonic-simple-psi0.sh).
-- [x] [2026-08-30] Released [docker support](#docker-support).
-- [x] [2026-07-14] Released DreamZero baseline for SIMPLE.
-- [x] [2026-06-13] Released SONIC integration for Psi-0.
-- [x] [2026-06-03] 🎉🎉🎉 Psi-0 won the Best Paper Award at the 2nd 3D-LLM/VLA Workshop at CVPR 2026.
-
 
 ## Table of Contents
 <!-- - [Installation](#-environment-setup) -->
@@ -818,13 +752,9 @@ See dedicated doc here [baseline/act](baselines/act/README.md)
 
 ## Simulation
 
-本仓库双来源UnifoLM-20k模型在4090单机独立测评的专用交接说明见
-[4090 SIMPLE需求与环境配置](../docs/4090_SIMPLE_HANDOFF.md)。模型侧Python3.11与SIMPLE侧Python3.10分环境运行，
-双来源 HTTP 服务支持真实历史／在线 DINO；SONIC v1.1身份与完整闭环按交接验收，
-下面的官方通用命令不能直接视为双来源模型已验收入口。
-20k保存后资源发布、SSH拉取与SHA校验见[资源交接](../docs/4090_SIMPLE_TRANSFER.md)。
+双来源 HTTP 服务接收真实历史并在线提取 DINO 特征。模型服务与仿真客户端使用独立环境。
 
-### 双来源本机 HTTP 协议
+### 双来源 HTTP 接口
 
 从仓库根目录使用模型侧 Conda 环境启动；run 目录中的
 `dino_training_contract.json` 绑定本机绝对路径、训练 DINO 权重逐文件 SHA、
@@ -832,10 +762,10 @@ NumPy/Pillow／ImageProcess 身份、无增强 `256x320` 及慢版 processor。
 DINO 的第二次 resize／center crop 关闭，参数冻结。
 
 ```bash
-/home/zxc/miniconda3/envs/cvpr-simple-model311/bin/python -m psi.deploy.serve_psi0_simple \
+python -m psi.deploy.serve_psi0_simple \
   --policy psi0 \
-  --run-dir /home/zxc/CVPR_Evaluation_runtime/resources/joint20k \
-  --ckpt-step 20000 --host 127.0.0.1 --port 21074 --device cuda:0 \
+  --run-dir "<RUN_DIR>" \
+  --ckpt-step "<CHECKPOINT_STEP>" --host 127.0.0.1 --port 21074 --device cuda:0 \
   --action-exec-horizon 30 --rtc-mode off --num-inference-steps 10
 ```
 

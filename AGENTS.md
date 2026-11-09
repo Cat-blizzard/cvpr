@@ -43,7 +43,7 @@
 ## 4. 数据与模型协议
 
 - 当前稳定接口与协议见 [docs/protocols/README.md](docs/protocols/README.md) 及各模块 README。
-- 新机器使用 [configs/README.md](configs/README.md) 中的本机配置入口；数据、权重、缓存和输出放在仓库外。
+- 路径配置见 [README.md](README.md#configuration)；数据、权重、缓存和输出放在仓库外。
 - 公开文档只包含使用者需要的接口、配置和操作说明。未确认的完整依赖说明先留空；本机运行环境、临时检查结果和维护过程不写入 README 或开发文档。
 - 协议变更时同步实现、配置、接口说明及相关验证。源码哈希、缓存身份与验收绑定不得通过重写旧证据绕过。
 

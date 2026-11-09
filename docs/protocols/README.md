@@ -49,4 +49,4 @@ DINO 使用冻结的 `dinov2-with-registers-large`；每帧输出 CLS＋4 个 re
 
 运动归档保留原始分割、手部、相机、地面、world 观测及有效 mask。5Hz 参考增量必须核对间隔内全部 30Hz 点和边，不能跨越跟踪中断。EgoSuite 没有源 confidence 时不伪造该字段；相机质量失败也不直接删除独立 world 观测或 DINO。
 
-数据、模型和输出目录的配置方式见[路径配置](../../configs/README.md)。
+数据、模型和输出目录的配置方式见[路径配置](../../README.md#configuration)。
